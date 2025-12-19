@@ -1,0 +1,14 @@
+build/
+__pycache__
+QRcodes
+sdkconfig
+sdkconfig.defaults
+sdkconfig*
+certs/
+*.crt
+*.key
+secrets.csv
+partitions.csv
+*.env
+*.venv
+*.bin
