@@ -1,81 +1,160 @@
 #include "wifi.h"
 #include "freertos/task.h"
+#include "esp_sntp.h"
 #include <string.h>
 
 #include "../auth/auth.h"
 
 static const char *TAG = "WIFI";
 
-void ntp_sync_time(void)
+static const uint32_t NTP_SYNC_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+static const uint8_t NIGHT_START_HOUR_UTC = 1;
+static const uint8_t NIGHT_END_HOUR_UTC = 5;
+static const uint32_t NTP_MANDATORY_SYNC_MS = 3 * 24 * 60 * 60 * 1000; // 3 Days
+static const uint32_t NTP_RETRY_DELAY_MS = 15 * 60 * 1000;             // 15 Mins (if mandatory fails)
+
+/* --- Private Functions --- */
+
+static void time_init_utc(void)
 {
-    ESP_LOGI(TAG, "Initializing SNTP");
-    if (esp_sntp_enabled())
-        esp_sntp_stop();
+    setenv("TZ", "UTC0", 1);
+    tzset();
+}
+
+static bool is_utc_night_time(void)
+{
+    time_t now;
+    struct tm timeinfo;
+    time(&now);
+    gmtime_r(&now, &timeinfo);
+
+    int hour = timeinfo.tm_hour;
+
+    if (NIGHT_START_HOUR_UTC <= NIGHT_END_HOUR_UTC)
+    {
+        return (hour >= NIGHT_START_HOUR_UTC && hour < NIGHT_END_HOUR_UTC);
+    }
+    else
+    {
+        return (hour >= NIGHT_START_HOUR_UTC || hour < NIGHT_END_HOUR_UTC);
+    }
+}
+
+static void ntp_management_task(void *pvParameters)
+{
+    ESP_LOGI(TAG, "Starting NTP Management Task");
+    time_init_utc();
+
     esp_sntp_setoperatingmode(SNTP_OPMODE_POLL);
     esp_sntp_setservername(0, "pool.ntp.org");
     esp_sntp_init();
 
-    time_t now = 0;
-    struct tm timeinfo = {0};
-    int retry = 0;
-
-    while (timeinfo.tm_year < (2016 - 1900) && ++retry)
+    // MANDATORY INITIAL SYNC
+    // We loop indefinitely here because you mentioned HTTPS requires it.
+    // The rest of the system stays responsive because this is its own task.
+    bool initial_sync_done = false; // Assigned once just on boot since it isn't wrapped under 'for (;;)'
+    while (!initial_sync_done)
     {
-        ESP_LOGI(TAG, "Waiting for system time... (%d)", retry);
-        vTaskDelay(pdMS_TO_TICKS(3000));
+        time_t now;
+        struct tm timeinfo;
         time(&now);
-        localtime_r(&now, &timeinfo);
+        gmtime_r(&now, &timeinfo);
+
+        if (timeinfo.tm_year >= (2020 - 1900))
+        { // Valid time found
+            char time_str[32];
+
+            // Format UTC time as ISO-8601
+            strftime(time_str, sizeof(time_str), "%Y-%m-%d %H:%M:%S UTC", &timeinfo);
+
+            ESP_LOGI(TAG, "Initial UTC time acquired: %s. HTTPS is now safe to use.", time_str);
+            initial_sync_done = true;
+        }
+        else
+        {
+            ESP_LOGI(TAG, "Waiting for mandatory initial NTP sync...");
+            vTaskDelay(pdMS_TO_TICKS(3000)); // Check every 5 seconds
+        }
     }
 
-    if (timeinfo.tm_year < (2016 - 1900))
+    TickType_t last_success_tick = xTaskGetTickCount();
+
+    // 2. MAINTENANCE LOOP
+    for (;;)
     {
-        ESP_LOGW(TAG, "Failed to obtain time via NTP");
-        // Depending on your needs, you might want to return here
-        // or allow the server to start with wrong time (will break HTTPS cert validation)
-    }
-    else
-    {
-        char strftime_buf[64];
-        strftime(strftime_buf, sizeof(strftime_buf), "%c", &timeinfo);
-        ESP_LOGI(TAG, "System time set to: %s", strftime_buf);
+        vTaskDelay(pdMS_TO_TICKS(10 * 60 * 1000)); // Wake every 10 mins
+
+        TickType_t current_tick = xTaskGetTickCount();
+        TickType_t elapsed_ms = (current_tick - last_success_tick) * portTICK_PERIOD_MS;
+
+        bool is_night = is_utc_night_time();
+        bool interval_reached = (elapsed_ms >= NTP_SYNC_INTERVAL_MS);
+        bool expired_3_days = (elapsed_ms >= NTP_MANDATORY_SYNC_MS);
+
+        // Logic: Sync if (Interval reached AND it's night) OR (It's been 3+ days)
+        if ((interval_reached && is_night) || expired_3_days)
+        {
+
+            if (expired_3_days)
+            {
+                ESP_LOGW(TAG, "Time expired (3 days). Forcing mandatory sync now.");
+            }
+            else
+            {
+                ESP_LOGI(TAG, "Maintenance window: Scheduled night sync.");
+            }
+
+            sntp_restart();
+
+            // Wait a bit to see if it worked
+            vTaskDelay(pdMS_TO_TICKS(10000));
+
+            time_t now;
+            struct tm timeinfo;
+            time(&now);
+            gmtime_r(&now, &timeinfo);
+
+            if (timeinfo.tm_year >= (2020 - 1900))
+            {
+                ESP_LOGI(TAG, "NTP Sync successful.");
+                last_success_tick = xTaskGetTickCount();
+            }
+            else
+            {
+                ESP_LOGE(TAG, "NTP Sync failed. Will retry in next check.");
+                // If it's mandatory, we might want to shorten the next check delay
+                if (expired_3_days)
+                {
+                    vTaskDelay(pdMS_TO_TICKS(NTP_RETRY_DELAY_MS));
+                }
+            }
+        }
     }
 }
-
-void on_connected_task(void *pvParameters)
-{
-    // Sync time with NTP server (Critical for HTTPS)
-    ntp_sync_time();
-
-    // Delete task to avoid return errors
-    vTaskDelete(NULL);
-}
-
 
 void wifi_event_handler(void *arg, esp_event_base_t event_base,
                         int32_t event_id, void *event_data)
 {
     if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START)
     {
-        ESP_LOGI(TAG, "Connecting to Wi-Fi...");
         esp_wifi_connect();
     }
     else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED)
     {
         ESP_LOGI(TAG, "Disconnected. Retrying...");
         esp_wifi_connect();
-        // Handle server cleanup if needed, or leave running
     }
     else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP)
     {
-        ip_event_got_ip_t *event = (ip_event_got_ip_t *)event_data;
-        ESP_LOGI(TAG, "Got Local IP: " IPSTR, IP2STR(&event->ip_info.ip));
-
-        // Placeholder for logic after successful connection
-        xTaskCreate(on_connected_task, "startup_task", 8192, NULL, 5, NULL);
+        static bool ntp_task_started = false;
+        if (!ntp_task_started)
+        {
+            ntp_task_started = true;
+            xTaskCreate(ntp_management_task, "ntp_mgr", 4096, NULL, 5, NULL);
+        }
     }
 }
 
-/* -------- WIFI INIT -------- */
 void wifi_init_sta(const char *ssid, const char *pass)
 {
     esp_netif_create_default_wifi_sta();
@@ -85,19 +164,19 @@ void wifi_init_sta(const char *ssid, const char *pass)
     ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, NULL, NULL));
     ESP_ERROR_CHECK(esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &wifi_event_handler, NULL, NULL));
 
-    wifi_config_t wifi_config = {0};
-    
-    // Copy credentials into the wifi_config struct safely
+    wifi_config_t wifi_config = {
+        .sta = {
+            .threshold.authmode = WIFI_AUTH_WPA2_PSK, // Using PSK for stability
+            .sae_pwe_h2e = WPA3_SAE_PWE_BOTH,
+        },
+    };
+
     if (ssid)
         strlcpy((char *)wifi_config.sta.ssid, ssid, sizeof(wifi_config.sta.ssid));
     if (pass)
         strlcpy((char *)wifi_config.sta.password, pass, sizeof(wifi_config.sta.password));
 
-    wifi_config.sta.threshold.authmode = WIFI_AUTH_WPA2_PSK;
-
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
     ESP_ERROR_CHECK(esp_wifi_start());
-
-    // The driver has now copied the credentials to its internal memory.
 }
