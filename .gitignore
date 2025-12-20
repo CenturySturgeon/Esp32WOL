@@ -12,3 +12,4 @@ partitions.csv
 *.env
 *.venv
 *.bin
+managed_components/
