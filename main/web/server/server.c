@@ -4,11 +4,11 @@
 
 httpd_handle_t http_server = NULL;
 httpd_handle_t https_server = NULL;
-extern const unsigned char server_crt_start[] asm("_binary_server_crt_start");
-extern const unsigned char server_crt_end[] asm("_binary_server_crt_end");
+extern const unsigned char server_crt_start[] asm("_binary_server_der_start");
+extern const unsigned char server_crt_end[] asm("_binary_server_der_end");
 
-extern const unsigned char server_key_start[] asm("_binary_server_key_start");
-extern const unsigned char server_key_end[] asm("_binary_server_key_end");
+extern const unsigned char server_key_start[] asm("_binary_server_key_der_start");
+extern const unsigned char server_key_end[] asm("_binary_server_key_der_end");
 
 static const char *TAG = "SERVER";
 
