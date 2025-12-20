@@ -6,6 +6,51 @@
 
 static const char *TAG = "WIFI";
 
+void ntp_sync_time(void)
+{
+    ESP_LOGI(TAG, "Initializing SNTP");
+    if (esp_sntp_enabled())
+        esp_sntp_stop();
+    esp_sntp_setoperatingmode(SNTP_OPMODE_POLL);
+    esp_sntp_setservername(0, "pool.ntp.org");
+    esp_sntp_init();
+
+    time_t now = 0;
+    struct tm timeinfo = {0};
+    int retry = 0;
+
+    while (timeinfo.tm_year < (2016 - 1900) && ++retry)
+    {
+        ESP_LOGI(TAG, "Waiting for system time... (%d)", retry);
+        vTaskDelay(pdMS_TO_TICKS(3000));
+        time(&now);
+        localtime_r(&now, &timeinfo);
+    }
+
+    if (timeinfo.tm_year < (2016 - 1900))
+    {
+        ESP_LOGW(TAG, "Failed to obtain time via NTP");
+        // Depending on your needs, you might want to return here
+        // or allow the server to start with wrong time (will break HTTPS cert validation)
+    }
+    else
+    {
+        char strftime_buf[64];
+        strftime(strftime_buf, sizeof(strftime_buf), "%c", &timeinfo);
+        ESP_LOGI(TAG, "System time set to: %s", strftime_buf);
+    }
+}
+
+void on_connected_task(void *pvParameters)
+{
+    // Sync time with NTP server (Critical for HTTPS)
+    ntp_sync_time();
+
+    // Delete task to avoid return errors
+    vTaskDelete(NULL);
+}
+
+
 void wifi_event_handler(void *arg, esp_event_base_t event_base,
                         int32_t event_id, void *event_data)
 {
@@ -26,7 +71,7 @@ void wifi_event_handler(void *arg, esp_event_base_t event_base,
         ESP_LOGI(TAG, "Got Local IP: " IPSTR, IP2STR(&event->ip_info.ip));
 
         // Placeholder for logic after successful connection
-        // xTaskCreate(on_connected_task, "startup_task", 8192, NULL, 5, NULL);
+        xTaskCreate(on_connected_task, "startup_task", 8192, NULL, 5, NULL);
     }
 }
 
