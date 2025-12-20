@@ -10,15 +10,16 @@ wifi_name = os.getenv('WIFI_NAME')
 wifi_password = os.getenv('WIFI_PASSWORD')
 telegram_bot_token = os.getenv('TELEGRAM_BOT_TOKEN')
 telegram_chat_id = os.getenv('TELEGRAM_CHAT_ID')
+totp_label = os.getenv('TOTP_LABEL')
+totp_issuer = os.getenv('TOTP_ISSUER')
 user_sessions_data = json.loads(os.getenv('USER_SESSIONS'))
-
 
 user_sessions = [
     UserSession(
         session['username'],
         int(session['timeout']),
-        session['totp_label'],
-        session['issuer']
+        totp_label,
+        totp_issuer
     )
     for session in user_sessions_data
 ]
