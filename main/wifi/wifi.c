@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "../auth/auth.h"
+#include "../web/server/server.h"
 
 static const char *TAG = "WIFI";
 
@@ -12,6 +13,10 @@ static const uint8_t NIGHT_START_HOUR_UTC = 1;
 static const uint8_t NIGHT_END_HOUR_UTC = 5;
 static const uint32_t NTP_MANDATORY_SYNC_MS = 3 * 24 * 60 * 60 * 1000; // 3 Days
 static const uint32_t NTP_RETRY_DELAY_MS = 15 * 60 * 1000;             // 15 Mins (if mandatory fails)
+
+// Global server handles so other parts of the code can access them
+httpd_handle_t g_http_server = NULL;
+httpd_handle_t g_https_server = NULL;
 
 /* --- Private Functions --- */
 
@@ -49,10 +54,8 @@ static void ntp_management_task(void *pvParameters)
     esp_sntp_setservername(0, "pool.ntp.org");
     esp_sntp_init();
 
-    // MANDATORY INITIAL SYNC
-    // We loop indefinitely here because you mentioned HTTPS requires it.
-    // The rest of the system stays responsive because this is its own task.
-    bool initial_sync_done = false; // Assigned once just on boot since it isn't wrapped under 'for (;;)'
+    // 1. Mandatory initial sync
+    bool initial_sync_done = false;
     while (!initial_sync_done)
     {
         time_t now;
@@ -61,28 +64,40 @@ static void ntp_management_task(void *pvParameters)
         gmtime_r(&now, &timeinfo);
 
         if (timeinfo.tm_year >= (2020 - 1900))
-        { // Valid time found
+        {
             char time_str[32];
-
-            // Format UTC time as ISO-8601
             strftime(time_str, sizeof(time_str), "%Y-%m-%d %H:%M:%S UTC", &timeinfo);
-
             ESP_LOGI(TAG, "Initial UTC time acquired: %s. HTTPS is now safe to use.", time_str);
             initial_sync_done = true;
+
+            // --- START SERVERS AFTER INITIAL NTP SYNC ---
+            ESP_LOGI(TAG, "Starting HTTP redirect server...");
+            g_http_server = start_http_redirect_server();
+            if (g_http_server == NULL)
+            {
+                ESP_LOGE(TAG, "Failed to start HTTP redirect server!");
+            }
+
+            ESP_LOGI(TAG, "Starting HTTPS server...");
+            g_https_server = start_https_server();
+            if (g_https_server == NULL)
+            {
+                ESP_LOGE(TAG, "Failed to start HTTPS server!");
+            }
         }
         else
         {
             ESP_LOGI(TAG, "Waiting for mandatory initial NTP sync...");
-            vTaskDelay(pdMS_TO_TICKS(3000)); // Check every 5 seconds
+            vTaskDelay(pdMS_TO_TICKS(3000));
         }
     }
 
     TickType_t last_success_tick = xTaskGetTickCount();
 
-    // 2. MAINTENANCE LOOP
+    // 2. Maintenance loop
     for (;;)
     {
-        vTaskDelay(pdMS_TO_TICKS(10 * 60 * 1000)); // Wake every 10 mins
+        vTaskDelay(pdMS_TO_TICKS(10 * 60 * 1000)); // 10 mins
 
         TickType_t current_tick = xTaskGetTickCount();
         TickType_t elapsed_ms = (current_tick - last_success_tick) * portTICK_PERIOD_MS;
@@ -91,10 +106,8 @@ static void ntp_management_task(void *pvParameters)
         bool interval_reached = (elapsed_ms >= NTP_SYNC_INTERVAL_MS);
         bool expired_3_days = (elapsed_ms >= NTP_MANDATORY_SYNC_MS);
 
-        // Logic: Sync if (Interval reached AND it's night) OR (It's been 3+ days)
         if ((interval_reached && is_night) || expired_3_days)
         {
-
             if (expired_3_days)
             {
                 ESP_LOGW(TAG, "Time expired (3 days). Forcing mandatory sync now.");
@@ -105,8 +118,6 @@ static void ntp_management_task(void *pvParameters)
             }
 
             sntp_restart();
-
-            // Wait a bit to see if it worked
             vTaskDelay(pdMS_TO_TICKS(10000));
 
             time_t now;
@@ -122,7 +133,6 @@ static void ntp_management_task(void *pvParameters)
             else
             {
                 ESP_LOGE(TAG, "NTP Sync failed. Will retry in next check.");
-                // If it's mandatory, we might want to shorten the next check delay
                 if (expired_3_days)
                 {
                     vTaskDelay(pdMS_TO_TICKS(NTP_RETRY_DELAY_MS));
