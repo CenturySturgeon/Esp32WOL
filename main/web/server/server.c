@@ -65,3 +65,26 @@ httpd_handle_t start_https_server(void)
     ESP_LOGE(TAG, "Error starting HTTPS server!");
     return NULL;
 }
+
+void start_mdns_service(void)
+{
+    esp_err_t err;
+
+    // Initialize mDNS
+    err = mdns_init();
+    if (err) {
+        ESP_LOGE(TAG, "MDNS Init failed: %d", err);
+        return;
+    }
+
+    // Set hostname (this is the "esp32.local" part)
+    err = mdns_hostname_set("esp32");  // So devices can reach it via esp32.local
+    if (err) {
+        ESP_LOGE(TAG, "MDNS hostname set failed: %d", err);
+    }
+
+    // Set instance name (friendly name for discovery apps)
+    mdns_instance_name_set("ESP32 HTTPS Server");
+
+    ESP_LOGI(TAG, "mDNS started, hostname=esp32.local");
+}

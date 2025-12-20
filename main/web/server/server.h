@@ -3,8 +3,10 @@
 
 #include "esp_http_server.h"
 #include "esp_https_server.h"
+#include "mdns.h"
 
 httpd_handle_t start_http_redirect_server(void);
 httpd_handle_t start_https_server(void);
+void start_mdns_service(void);
 
 #endif // SERVER_H

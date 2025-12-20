@@ -18,8 +18,6 @@ static const uint32_t NTP_RETRY_DELAY_MS = 15 * 60 * 1000;             // 15 Min
 httpd_handle_t g_http_server = NULL;
 httpd_handle_t g_https_server = NULL;
 
-/* --- Private Functions --- */
-
 static void time_init_utc(void)
 {
     setenv("TZ", "UTC0", 1);
@@ -69,6 +67,9 @@ static void ntp_management_task(void *pvParameters)
             strftime(time_str, sizeof(time_str), "%Y-%m-%d %H:%M:%S UTC", &timeinfo);
             ESP_LOGI(TAG, "Initial UTC time acquired: %s. HTTPS is now safe to use.", time_str);
             initial_sync_done = true;
+            
+            // Start MDNs service
+            start_mdns_service();
 
             // --- START SERVERS AFTER INITIAL NTP SYNC ---
             ESP_LOGI(TAG, "Starting HTTP redirect server...");
