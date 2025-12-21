@@ -3,7 +3,10 @@
 #include "esp_https_server.h"
 #include "esp_log.h"
 
+#include "../views/copyIp.h"
 #include "../views/home.h"
+#include "../views/status.h"
+#include "../views/wol.h"
 
 static const char *TAG = "ROUTE";
 
