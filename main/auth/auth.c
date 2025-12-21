@@ -54,11 +54,11 @@ esp_err_t init_and_load_secrets()
             required_size = sizeof(users_list[i - 1].hmac);
             nvs_get_blob(handle, key, users_list[i - 1].hmac, &required_size);
 
-            ESP_LOGI(TAG, "Loaded [%s] - TTL: %d", users_list[i - 1].name, users_list[i - 1].ttl);
+            // ESP_LOGI(TAG, "Loaded [%s] - TTL: %d", users_list[i - 1].name, users_list[i - 1].ttl);
         }
     }
 
-    ESP_LOGI(TAG, "System secrets loaded. Ready for Wi-Fi and Telegram init.");
+    ESP_LOGI(TAG, "System secrets loaded");
 
     nvs_close(handle);
     return ESP_OK;
@@ -77,6 +77,23 @@ esp_err_t auth_get_wifi_credentials(char *ssid, size_t ssid_len, char *pass, siz
     if (err == ESP_OK)
     {
         err = nvs_get_str(handle, "wifi_pass", pass, &pass_len);
+    }
+
+    nvs_close(handle);
+    return err;
+}
+
+esp_err_t auth_get_telegram_secrets(char *token, size_t token_len, char *chat_id, size_t chat_id_len)
+{
+    nvs_handle_t handle;
+    esp_err_t err = nvs_open_from_partition("storage", "storage", NVS_READONLY, &handle);
+    if (err != ESP_OK)
+        return err;
+
+    err = nvs_get_str(handle, "bot_token", token, &token_len);
+    if (err == ESP_OK)
+    {
+        err = nvs_get_str(handle, "chat_id", chat_id, &chat_id_len);
     }
 
     nvs_close(handle);

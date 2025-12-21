@@ -67,6 +67,12 @@ static void public_ip_management_task(void *pvParameters)
         {
             ESP_LOGI(TAG, "SUCCESS: Public IP acquired: %s", public_ip);
             initial_ip_got = true;
+            char msg[128];
+            snprintf(msg, sizeof(msg),
+                    "Esp32 online 🚀\nhttps://%s",
+                    public_ip);
+
+            telegram_send_message(msg, true);
         }
         else
         {
@@ -94,8 +100,12 @@ static void public_ip_management_task(void *pvParameters)
                 memset(public_ip, 0, sizeof(public_ip));
                 strncpy(public_ip, temp_ip, sizeof(public_ip) - 1);
 
-                // TODO: Insert Notification Function Here
-                // notify_user_of_ip_change(public_ip);
+                char msg[128];
+                snprintf(msg, sizeof(msg),
+                        "Public IP change to:\nhttps://%s",
+                        public_ip);
+
+                telegram_send_message(msg, false);
             }
             else
             {

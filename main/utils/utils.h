@@ -6,5 +6,6 @@
 
 esp_err_t get_public_ip(char *ip_buf, size_t ip_buf_len);
 esp_err_t send_wol_packet(const uint8_t *mac_addr_hex);
+esp_err_t telegram_send_message(const char *message, bool silent);
 
 #endif // UTILS_H

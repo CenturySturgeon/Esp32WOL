@@ -19,5 +19,6 @@ typedef struct
 esp_err_t init_and_load_secrets();
 esp_err_t auth_get_wifi_credentials(char *ssid, size_t ssid_len, char *pass, size_t pass_len);
 esp_err_t auth_get_user_hmac(const char *username, uint8_t *hmac_out, size_t *hmac_len);
+esp_err_t auth_get_telegram_secrets(char *token, size_t token_len, char *chat_id, size_t chat_id_len);
 
 #endif // AUTH_H
