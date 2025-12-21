@@ -25,7 +25,7 @@ class UserSession:
         self.uname = user_name
         self.timeout = str(session_timeout)
         self.pin = self.get_random_pin_Code()
-        self.accessHash = self.generate_sha256_hash(self.uname + ":" + self.pin)
+        self.accessHash = self.generate_sha256_hash(self.pin)
         self.hmacKey = self.create_qr_code(self.uname, totp_label, totp_issuer)
         print(f'{self.uname} PIN: {self.pin}')
     
