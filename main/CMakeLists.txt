@@ -2,7 +2,7 @@ idf_component_register(
     SRCS "main.c"
          "auth/auth.c"
          "utils/utils.c"
-         "web/server/routes.c"
+         "web/server/handlers.c"
          "web/server/server.c"
          "wifi/wifi.c"
     INCLUDE_DIRS "."
