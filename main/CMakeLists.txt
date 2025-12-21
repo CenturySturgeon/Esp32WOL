@@ -6,7 +6,7 @@ idf_component_register(
          "web/server/server.c"
          "wifi/wifi.c"
     INCLUDE_DIRS "."
-    REQUIRES esp_https_server nvs_flash esp_netif esp_wifi esp_http_client mdns
+    REQUIRES esp_https_server nvs_flash esp_netif esp_wifi esp_http_client mdns esp_timer
     EMBED_FILES
         "web/certs/api_ipify.pem"
         "web/certs/server.der"
