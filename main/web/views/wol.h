@@ -7,6 +7,16 @@ static const char wol_html[] = R"HTML(
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>Wake-on-LAN</title>
+
+    <!-- Font Awesome -->
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
+      integrity="sha512-DTOQO9RWCH3ppGqcWaEA1BIZOC6xxalwEsw9c2QQeAIftl+Vegovlnee1c9QX4TctnWMn13TZye+giMm8e2LwA=="
+      crossorigin="anonymous"
+      referrerpolicy="no-referrer"
+    />
+
     <style>
       body {
         font-family: Arial, sans-serif;
@@ -42,11 +52,12 @@ static const char wol_html[] = R"HTML(
         margin: 5px;
       }
       .input {
+        width: 100%;
         padding: 10px;
-        margin: 5px 0;
         border: 1px solid #ccc;
         border-radius: 3px;
         text-align: center;
+        box-sizing: border-box;
       }
       .input-group button[type="submit"] {
         background: #333;
@@ -55,9 +66,31 @@ static const char wol_html[] = R"HTML(
         width: 100%;
         font-size: medium;
         font-weight: 700;
+        border: none;
+        transition: background 0.2s ease;
       }
       .input-group button[type="submit"]:hover {
         background: #555;
+      }
+      /* PIN field with inline icon */
+      .pin-wrapper {
+        position: relative;
+      }
+      .pin-wrapper .input {
+        padding-right: 38px; /* space for icon */
+      }
+      .paste-icon {
+        position: absolute;
+        right: 10px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: #aaa;
+        cursor: pointer;
+        font-size: 1rem;
+        transition: color 0.2s ease;
+      }
+      .paste-icon:hover {
+        color: #333;
       }
     </style>
   </head>
@@ -66,8 +99,8 @@ static const char wol_html[] = R"HTML(
       <h2>Turn On Device</h2>
       <form action="wol" method="POST">
         <div class="input-group">
-          <label for="macAddress">MAC Address</label
-          ><input
+          <label for="macAddress">MAC Address</label>
+          <input
             class="input"
             type="text"
             id="macAddress"
@@ -77,8 +110,8 @@ static const char wol_html[] = R"HTML(
           />
         </div>
         <div class="input-group">
-          <label for="secureOn">SecureOn (Optional)</label
-          ><input
+          <label for="secureOn">SecureOn (Optional)</label>
+          <input
             class="input"
             type="text"
             id="secureOn"
@@ -87,8 +120,8 @@ static const char wol_html[] = R"HTML(
           />
         </div>
         <div class="input-group">
-          <label for="broadcastAddress">Broadcast IP (Optional)</label
-          ><input
+          <label for="broadcastAddress">Broadcast IP (Optional)</label>
+          <input
             class="input"
             type="text"
             id="broadcastAddress"
@@ -97,14 +130,34 @@ static const char wol_html[] = R"HTML(
           />
         </div>
         <div class="input-group">
-          <label for="pin">Enter your PIN</label
-          ><input class="input" type="password" id="pin" name="pin" required />
+          <label for="pin">Enter your PIN</label>
+          <div class="pin-wrapper">
+            <input class="input" type="password" id="pin" name="pin" required />
+            <i
+              class="fa-solid fa-clipboard paste-icon"
+              onclick="pastePin()"
+              title="Paste PIN"
+              aria-label="Paste PIN"
+              role="button"
+              tabindex="0"
+            ></i>
+          </div>
         </div>
         <div class="input-group">
           <button class="input" type="submit">WAKE UP</button>
         </div>
       </form>
     </div>
+    <script>
+      async function pastePin() {
+        try {
+          const text = await navigator.clipboard.readText();
+          document.getElementById("pin").value = text;
+        } catch (err) {
+          alert("Clipboard access failed. Please paste manually.");
+        }
+      }
+    </script>
   </body>
 </html>
 )HTML";
