@@ -22,10 +22,6 @@ static const uint32_t IP_BOOT_RETRY_MS = 5 * 1000;           // 10 Secs (Fast re
 
 char public_ip[64];
 
-// Global server handles
-httpd_handle_t g_http_server = NULL;
-httpd_handle_t g_https_server = NULL;
-
 static void time_init_utc(void)
 {
     setenv("TZ", "UTC0", 1);
@@ -145,19 +141,18 @@ static void ntp_management_task(void *pvParameters)
             initial_sync_done = true;
 
             // Start Services Dependent on Time
-
             start_mdns_service();
 
             ESP_LOGI(TAG, "Starting HTTP redirect server...");
-            g_http_server = start_http_redirect_server();
-            if (g_http_server == NULL)
+            http_server = start_http_redirect_server(); // Uses the server.c http server
+            if (http_server == NULL)
             {
                 ESP_LOGE(TAG, "Failed to start HTTP redirect server!");
             }
 
             ESP_LOGI(TAG, "Starting HTTPS server...");
-            g_https_server = start_https_server();
-            if (g_https_server == NULL)
+            https_server = start_https_server(); // Uses the server.c https server
+            if (https_server == NULL)
             {
                 ESP_LOGE(TAG, "Failed to start HTTPS server!");
             }
