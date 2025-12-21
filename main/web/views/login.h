@@ -1,6 +1,6 @@
 #pragma once
 
-static const char index_html[] = R"HTML(
+static const char login_html[] = R"HTML(
 <!DOCTYPE html>
 <html lang="en">
 <head>

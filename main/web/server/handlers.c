@@ -4,7 +4,7 @@
 #include "esp_log.h"
 
 #include "../views/copyIp.h"
-#include "../views/home.h"
+#include "../views/login.h"
 #include "../views/status.h"
 #include "../views/wol.h"
 
@@ -101,6 +101,6 @@ esp_err_t copyIp_handler(httpd_req_t *req)
 esp_err_t home_handler(httpd_req_t *req)
 {
     httpd_resp_set_type(req, "text/html");
-    httpd_resp_send(req, index_html, HTTPD_RESP_USE_STRLEN);
+    httpd_resp_send(req, login_html, HTTPD_RESP_USE_STRLEN);
     return ESP_OK;
 }
