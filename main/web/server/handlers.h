@@ -5,7 +5,7 @@
 
 esp_err_t http_redirect_handler(httpd_req_t *req);
 esp_err_t https_redirect_handler(httpd_req_t *req);
-esp_err_t home_handler(httpd_req_t *req);
+esp_err_t login_handler(httpd_req_t *req);
 esp_err_t copyIp_handler(httpd_req_t *req);
 
 typedef enum {

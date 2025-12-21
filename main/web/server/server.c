@@ -18,6 +18,7 @@ static uint8_t TCP_HANDSHAKE_LINGER_TIMEOUT = 90; // Keep connections alive for 
 static bool LRU_PURGE = true;                     // Purge connections with LRU algo
 
 static redirect_type_t redirect_copy_ip = REDIRECT_COPY_IP;
+static redirect_type_t redirect_login = REDIRECT_LOGIN;
 
 static const char *TAG = "SERVER";
 
@@ -73,8 +74,8 @@ httpd_handle_t start_https_server(void)
         httpd_uri_t root = {
             .uri = "/",
             .method = HTTP_GET,
-            .handler = home_handler,
-            .user_ctx = NULL};
+            .handler = https_redirect_handler,
+            .user_ctx = &redirect_login};
 
         httpd_uri_t ip = {
             .uri = "/ip",
@@ -88,9 +89,16 @@ httpd_handle_t start_https_server(void)
             .handler = copyIp_handler,
             .user_ctx = NULL};
 
+        httpd_uri_t login = {
+            .uri = "/login",
+            .method = HTTP_GET,
+            .handler = login_handler,
+            .user_ctx = &redirect_copy_ip};
+
         httpd_register_uri_handler(https_server, &root);
         httpd_register_uri_handler(https_server, &ip);
         httpd_register_uri_handler(https_server, &copyIp);
+        httpd_register_uri_handler(https_server, &login);
         return https_server;
     }
 
