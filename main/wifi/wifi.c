@@ -52,7 +52,7 @@ static void ntp_management_task(void *pvParameters)
     esp_sntp_setservername(0, "pool.ntp.org");
     esp_sntp_init();
 
-    // 1. Mandatory initial sync
+    // Mandatory initial sync
     bool initial_sync_done = false;
     while (!initial_sync_done)
     {
@@ -67,11 +67,11 @@ static void ntp_management_task(void *pvParameters)
             strftime(time_str, sizeof(time_str), "%Y-%m-%d %H:%M:%S UTC", &timeinfo);
             ESP_LOGI(TAG, "Initial UTC time acquired: %s. HTTPS is now safe to use.", time_str);
             initial_sync_done = true;
-            
+
             // Start MDNs service
             start_mdns_service();
 
-            // --- START SERVERS AFTER INITIAL NTP SYNC ---
+            // Start servers
             ESP_LOGI(TAG, "Starting HTTP redirect server...");
             g_http_server = start_http_redirect_server();
             if (g_http_server == NULL)
@@ -95,7 +95,7 @@ static void ntp_management_task(void *pvParameters)
 
     TickType_t last_success_tick = xTaskGetTickCount();
 
-    // 2. Maintenance loop
+    // Maintenance loop
     for (;;)
     {
         vTaskDelay(pdMS_TO_TICKS(10 * 60 * 1000)); // 10 mins

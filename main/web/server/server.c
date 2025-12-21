@@ -72,14 +72,16 @@ void start_mdns_service(void)
 
     // Initialize mDNS
     err = mdns_init();
-    if (err) {
+    if (err)
+    {
         ESP_LOGE(TAG, "MDNS Init failed: %d", err);
         return;
     }
 
     // Set hostname (this is the "esp32.local" part)
-    err = mdns_hostname_set("esp32");  // So devices can reach it via esp32.local
-    if (err) {
+    err = mdns_hostname_set("esp32"); // So devices can reach it via esp32.local
+    if (err)
+    {
         ESP_LOGE(TAG, "MDNS hostname set failed: %d", err);
     }
 
