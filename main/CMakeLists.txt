@@ -1,6 +1,7 @@
 idf_component_register(
     SRCS "main.c"
          "auth/auth.c"
+         "utils/utils.c"
          "web/server/routes.c"
          "web/server/server.c"
          "wifi/wifi.c"
