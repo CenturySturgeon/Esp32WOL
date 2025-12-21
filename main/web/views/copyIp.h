@@ -70,7 +70,7 @@ static const char copyIp_html[] = R"HTML(
       }
       .container {
         background: #fff;
-        padding: 30px;
+        padding: 40px;
         border-radius: 5px;
         box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
         width: 300px;
