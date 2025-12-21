@@ -1,11 +1,20 @@
 #include "auth.h"
-#include "mbedtls/sha256.h"
 #include "esp_random.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
+#include "mbedtls/sha256.h"
+
+#include "../web/server/server.h"
+#include "../utils/utils.h"
 
 static const char *TAG = "AUTH_SYSTEM";
 
 user_session_t *users_list = NULL;
 uint8_t total_users_count = 0;
+
+static uint8_t MAX_FAILED_LOGINS = 5;
+static uint8_t failed_login_count = 0;
+static SemaphoreHandle_t auth_mutex = NULL;
 
 esp_err_t init_and_load_secrets()
 {
@@ -62,6 +71,13 @@ esp_err_t init_and_load_secrets()
 
     ESP_LOGI(TAG, "System secrets loaded");
 
+    auth_mutex = xSemaphoreCreateMutex();
+    if (!auth_mutex)
+    {
+        ESP_LOGE(TAG, "Failed to create auth mutex");
+        return ESP_FAIL;
+    }
+
     nvs_close(handle);
     return ESP_OK;
 }
@@ -102,6 +118,38 @@ esp_err_t auth_get_telegram_secrets(char *token, size_t token_len, char *chat_id
     return err;
 }
 
+static void auth_register_failed_login(void)
+{
+    xSemaphoreTake(auth_mutex, portMAX_DELAY);
+
+    failed_login_count++;
+    ESP_LOGW(TAG, "Failed login attempt %d/%d",
+             failed_login_count, MAX_FAILED_LOGINS);
+
+    if (failed_login_count >= MAX_FAILED_LOGINS)
+    {
+        if (https_server)
+        {
+            ESP_LOGE(TAG, "Max failed logins reached. Stopping HTTPS server.");
+            char msg[128] = "🚨 5 Bad Login Attempts 🚨\nServer shutdown!";
+            telegram_send_message(msg, false);
+            httpd_ssl_stop(https_server);
+            https_server = NULL;
+        }
+    }
+
+    xSemaphoreGive(auth_mutex);
+}
+
+static void auth_reset_failed_logins(void)
+{
+    xSemaphoreTake(auth_mutex, portMAX_DELAY);
+    failed_login_count = 0;
+    xSemaphoreGive(auth_mutex);
+
+    ESP_LOGI(TAG, "Failed login counter reset");
+}
+
 void bytes_to_hex(const unsigned char *src, char *dest, int len)
 {
     for (int i = 0; i < len; i++)
@@ -135,6 +183,8 @@ esp_err_t auth_login_user(const char *username, const char *password, char *out_
             {
                 ESP_LOGI(TAG, "Password match for %s", username);
 
+                auth_reset_failed_logins();
+
                 // Generate Session Token (Random Hex)
                 uint8_t rand_bytes[16];
                 esp_fill_random(rand_bytes, 16);
@@ -142,7 +192,8 @@ esp_err_t auth_login_user(const char *username, const char *password, char *out_
 
                 // Set Expiry (TTL is in seconds, convert to microseconds)
                 // If stored TTL is 0 return
-                if (users_list[i].ttl <= 0){
+                if (users_list[i].ttl <= 0)
+                {
                     return ESP_FAIL;
                 }
                 int ttl_sec = users_list[i].ttl;
@@ -157,12 +208,14 @@ esp_err_t auth_login_user(const char *username, const char *password, char *out_
             else
             {
                 ESP_LOGW(TAG, "Invalid password for %s", username);
+                auth_register_failed_login();
                 return ESP_FAIL;
             }
         }
     }
 
     ESP_LOGW(TAG, "User %s not found", username);
+    auth_register_failed_login();
     return ESP_FAIL;
 }
 
