@@ -50,7 +50,6 @@ static bool is_utc_night_time(void)
 static void public_ip_management_task(void *pvParameters)
 {
     ESP_LOGI(TAG, "Starting Public IP Management Task");
-
     char temp_ip[64]; // Temporary buffer to check for changes
 
     // Mandatory Boot Retrieval
@@ -63,12 +62,9 @@ static void public_ip_management_task(void *pvParameters)
         {
             ESP_LOGI(TAG, "SUCCESS: Public IP acquired: %s", public_ip);
             initial_ip_got = true;
-            char msg[128];
-            snprintf(msg, sizeof(msg),
-                    "Esp32 online 🚀\nhttps://%s",
-                    public_ip);
 
-            telegram_send_message(msg, true);
+            // Notify via Queue (note format string directly)
+            telegram_post_to_queue("Esp32 online 🚀\nhttps://%s", true, public_ip);
         }
         else
         {
@@ -81,9 +77,7 @@ static void public_ip_management_task(void *pvParameters)
     for (;;)
     {
         vTaskDelay(pdMS_TO_TICKS(IP_CHECK_INTERVAL_MS));
-
         ESP_LOGI(TAG, "Performing periodic Public IP check...");
-
         // Use temp buffer to avoid overwriting global with bad data on failure
         if (get_public_ip(temp_ip, sizeof(temp_ip)) == ESP_OK)
         {
@@ -91,17 +85,11 @@ static void public_ip_management_task(void *pvParameters)
             if (strcmp(public_ip, temp_ip) != 0)
             {
                 ESP_LOGW(TAG, "DETECTED CHANGE: Public IP changed from %s to %s", public_ip, temp_ip);
-
                 // Update global variable
                 memset(public_ip, 0, sizeof(public_ip));
                 strncpy(public_ip, temp_ip, sizeof(public_ip) - 1);
 
-                char msg[128];
-                snprintf(msg, sizeof(msg),
-                        "Public IP change to:\nhttps://%s",
-                        public_ip);
-
-                telegram_send_message(msg, false);
+                telegram_post_to_queue("Public IP change to:\nhttps://%s", true, public_ip);
             }
             else
             {
@@ -238,13 +226,16 @@ void wifi_event_handler(void *arg, esp_event_base_t event_base,
             ntp_task_started = true;
             // We only start NTP manager. The IP manager is spawned BY the NTP manager
             // once time is safe for HTTPS.
-            xTaskCreate(ntp_management_task, "ntp_mgr", 4096, NULL, 5, NULL);
+            xTaskCreate(ntp_management_task, "ntp_mgr", 8192, NULL, 5, NULL);
         }
     }
 }
 
 void wifi_init_sta(const char *ssid, const char *pass)
 {
+    // Initialize telegram queue (before wifi so its redy immediately)
+    telegram_system_init();
+
     esp_netif_create_default_wifi_sta();
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));

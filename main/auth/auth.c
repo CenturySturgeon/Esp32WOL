@@ -132,8 +132,8 @@ static void auth_register_failed_login(void)
         if (https_server)
         {
             ESP_LOGE(TAG, "Max failed logins reached. Stopping HTTPS server.");
-            char msg[128] = "🚨 5 Bad Login Attempts 🚨\nServer shutdown!";
-            telegram_send_message(msg, false);
+            char msg[128] = "🚨 Too Many Bad Login Attempts 🚨\nServer shutdown!";
+            telegram_post_to_queue(msg, false);
             httpd_ssl_stop(https_server);
             https_server = NULL;
         }
