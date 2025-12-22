@@ -50,7 +50,8 @@ bool totp_verify(
     time_t now = time(NULL);
     uint64_t counter = now / 30;
 
-    uint32_t expected = totp_generate(key, key_len, counter + i);
+    uint32_t expected = totp_generate(key, key_len, counter);
+    ESP_LOGI(TAG, "Verifying TOTP pin");
     // ESP_LOGI(TAG, "Expected TOTP: %u", expected);
     if (expected == user_code)
     {

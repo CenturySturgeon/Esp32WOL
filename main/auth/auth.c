@@ -4,6 +4,7 @@
 #include "freertos/semphr.h"
 #include "mbedtls/sha256.h"
 
+#include "totp.h"
 #include "../web/server/server.h"
 #include "../utils/utils.h"
 
@@ -249,4 +250,77 @@ esp_err_t auth_check_session(const char *token)
         }
     }
     return ESP_FAIL;
+}
+
+esp_err_t auth_get_user_hmac_via_token(
+    const char *token,
+    uint8_t *hmac_out,
+    size_t *hmac_len)
+{
+    if (!token || !hmac_out || !hmac_len)
+    {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    if (!users_list || total_users_count == 0)
+    {
+        return ESP_ERR_NOT_FOUND;
+    }
+
+    for (int i = 0; i < total_users_count; i++)
+    {
+        if (strcmp(users_list[i].session_token, token) == 0)
+        {
+
+            size_t stored_len = sizeof(users_list[i].hmac);
+
+            if (*hmac_len < stored_len)
+            {
+                *hmac_len = stored_len;
+                return ESP_ERR_NO_MEM;
+            }
+
+            memcpy(hmac_out, users_list[i].hmac, stored_len);
+            *hmac_len = stored_len;
+
+            return ESP_OK;
+        }
+    }
+
+    return ESP_ERR_NOT_FOUND;
+}
+
+esp_err_t auth_check_totp_request(const char *token, const uint32_t pin)
+{
+    if (auth_check_session(token) != ESP_OK)
+    {
+        return ESP_FAIL;
+    }
+
+    // ESP_LOGI(TAG, "Received PIN: %u", pin);
+
+    uint8_t hmac_key[32];
+    size_t hmac_len = sizeof(hmac_key);
+
+    esp_err_t err = auth_get_user_hmac_via_token(token, hmac_key, &hmac_len);
+    if (err != ESP_OK)
+    {
+        ESP_LOGW(TAG, "User HMAC not found");
+        return ESP_FAIL;
+    }
+    else
+    {
+
+        bool valid = totp_verify(hmac_key, hmac_len, pin);
+
+        if (!valid)
+        {
+            ESP_LOGE(TAG, "DENIED ACCESS");
+            return ESP_FAIL;
+        }
+    }
+
+    ESP_LOGI(TAG, "TOTP ACCESS ALLOWED");
+
+    return ESP_OK;
 }

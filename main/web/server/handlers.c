@@ -107,6 +107,13 @@ esp_err_t get_login_handler(httpd_req_t *req)
     return ESP_OK;
 }
 
+esp_err_t get_status_handler(httpd_req_t *req)
+{
+    httpd_resp_set_type(req, "text/html");
+    httpd_resp_send(req, status_html, HTTPD_RESP_USE_STRLEN);
+    return ESP_OK;
+}
+
 esp_err_t post_login_handler(httpd_req_t *req)
 {
     char content[128]; // Buffer for body (username=x&password=y)
@@ -244,7 +251,59 @@ esp_err_t get_wol_handler(httpd_req_t *req)
 // Protected Route
 esp_err_t post_wol_handler(httpd_req_t *req)
 {
+    const size_t MAX_POST_SIZE = 128;
+
+    char content[MAX_POST_SIZE];
+    memset(content, 0, sizeof(content));
+
+    int total_len = req->content_len;
+    int cur_len = 0;
+    int received = 0;
+
+    if (total_len >= MAX_POST_SIZE)
+    {
+        ESP_LOGE(TAG, "POST data too large");
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Content too large");
+        return ESP_FAIL;
+    }
+
+    while (cur_len < total_len)
+    {
+        received = httpd_req_recv(req,
+                                  content + cur_len,
+                                  total_len - cur_len);
+        if (received <= 0)
+        {
+            ESP_LOGE(TAG, "Failed to receive POST data");
+            return ESP_FAIL;
+        }
+        cur_len += received;
+    }
+
+    content[cur_len] = '\0';
+
+    ESP_LOGI(TAG, "POST body: %s", content);
+
+    // Extract pin
+    char pin[16] = {0};
+
+    char *pin_start = strstr(content, "pin=");
+    if (pin_start)
+    {
+        pin_start += 4; // skip "pin="
+        char *pin_end = strchr(pin_start, '&');
+        size_t pin_len = pin_end ? (size_t)(pin_end - pin_start) : strlen(pin_start);
+
+        if (pin_len < sizeof(pin))
+        {
+            strncpy(pin, pin_start, pin_len);
+            pin[pin_len] = '\0';
+            // ESP_LOGI(TAG, "PIN received: %s", pin);
+        }
+    }
+
     char token[33];
+    uint32_t pin_code = strtoul(pin, NULL, 10);
     if (_get_cookie_value(req, "SESSIONID", token, sizeof(token)) == ESP_OK)
     {
 
@@ -252,20 +311,21 @@ esp_err_t post_wol_handler(httpd_req_t *req)
         {
             // Authorized
             ESP_LOGI(TAG, "Access granted to /wol");
-            
-            // Redirect to success status page
-            httpd_resp_set_status(req, "303 See Other");
-            httpd_resp_set_hdr(req, "Location", "/login");
-            httpd_resp_send(req, NULL, 0);
 
-            return ESP_OK;
+            if (auth_check_totp_request(token, pin_code) == ESP_OK)
+            {
+                // Redirect to success status page
+                httpd_resp_set_status(req, "303 See Other");
+                httpd_resp_set_hdr(req, "Location", "/status?s=success");
+                httpd_resp_send(req, NULL, 0);
+            }
         }
     }
 
     // Unauthorized
     ESP_LOGW(TAG, "Unauthorized access to /wol. Redirecting to Login.");
     httpd_resp_set_status(req, "303 See Other");
-    httpd_resp_set_hdr(req, "Location", "/login");
+    httpd_resp_set_hdr(req, "Location", "/status?s=error");
     httpd_resp_send(req, NULL, 0);
     return ESP_OK;
 }

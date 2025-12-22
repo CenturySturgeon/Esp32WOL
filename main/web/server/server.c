@@ -94,10 +94,10 @@ httpd_handle_t start_https_server(void)
             .handler = get_login_handler,
             .user_ctx = NULL};
 
-        httpd_uri_t login_post = {
-            .uri = "/login",
-            .method = HTTP_POST,
-            .handler = post_login_handler,
+        httpd_uri_t status_get = {
+            .uri = "/status",
+            .method = HTTP_GET,
+            .handler = get_status_handler,
             .user_ctx = NULL};
 
         // Protected
@@ -107,12 +107,27 @@ httpd_handle_t start_https_server(void)
             .handler = get_wol_handler,
             .user_ctx = NULL};
 
+        httpd_uri_t login_post = {
+            .uri = "/login",
+            .method = HTTP_POST,
+            .handler = post_login_handler,
+            .user_ctx = NULL};
+
+        httpd_uri_t wol_post = {
+            .uri = "/wol",
+            .method = HTTP_POST,
+            .handler = post_wol_handler,
+            .user_ctx = NULL};
+
         httpd_register_uri_handler(https_server, &root);
         httpd_register_uri_handler(https_server, &ip);
         httpd_register_uri_handler(https_server, &copyIp);
         httpd_register_uri_handler(https_server, &login_get);
-        httpd_register_uri_handler(https_server, &login_post);
+        httpd_register_uri_handler(https_server, &status_get);
         httpd_register_uri_handler(https_server, &wol_get);
+
+        httpd_register_uri_handler(https_server, &login_post);
+        httpd_register_uri_handler(https_server, &wol_post);
 
         return https_server;
     }

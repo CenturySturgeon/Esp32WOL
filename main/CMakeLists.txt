@@ -1,6 +1,7 @@
 idf_component_register(
     SRCS "main.c"
          "auth/auth.c"
+         "auth/totp.c"
          "utils/utils.c"
          "web/server/handlers.c"
          "web/server/server.c"
