@@ -294,6 +294,7 @@ esp_err_t auth_check_totp_request(const char *token, const uint32_t pin)
 {
     if (auth_check_session(token) != ESP_OK)
     {
+        auth_register_failed_login();
         return ESP_FAIL;
     }
 
@@ -306,6 +307,7 @@ esp_err_t auth_check_totp_request(const char *token, const uint32_t pin)
     if (err != ESP_OK)
     {
         ESP_LOGW(TAG, "User HMAC not found");
+        auth_register_failed_login();
         return ESP_FAIL;
     }
     else
@@ -315,12 +317,13 @@ esp_err_t auth_check_totp_request(const char *token, const uint32_t pin)
 
         if (!valid)
         {
-            ESP_LOGE(TAG, "DENIED ACCESS");
+            ESP_LOGE(TAG, "ACCESS DENIED");
+            auth_register_failed_login();
             return ESP_FAIL;
         }
     }
 
-    ESP_LOGI(TAG, "TOTP ACCESS ALLOWED");
+    ESP_LOGI(TAG, "TOTP Access allowed");
 
     return ESP_OK;
 }
