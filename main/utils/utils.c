@@ -126,49 +126,66 @@ void url_decode(char *src)
     *dst = '\0';
 }
 
-esp_err_t send_wol_packet(const uint8_t *mac_addr_hex)
+esp_err_t send_wol_packet(const char *mac_str, const char *secure_str, const char *broadcast_str)
 {
-    // Create the Magic Packet (6 * 0xFF + 16 * MAC)
-    uint8_t packet[102];
+    uint8_t mac_hex[6];
+    uint8_t secure_hex[6];
+    bool use_secure = (secure_str && strlen(secure_str) > 0);
+
+    // Convert MAC string to hex
+    if (sscanf(mac_str, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
+               &mac_hex[0], &mac_hex[1], &mac_hex[2], &mac_hex[3], &mac_hex[4], &mac_hex[5]) != 6)
+    {
+        ESP_LOGE(TAG, "Invalid MAC format");
+        return ESP_FAIL;
+    }
+
+    // Convert SecureOn string to hex if provided
+    if (use_secure)
+    {
+        sscanf(secure_str, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
+               &secure_hex[0], &secure_hex[1], &secure_hex[2], &secure_hex[3], &secure_hex[4], &secure_hex[5]);
+    }
+
+    // Packet size: 102 (standard) + 6 (SecureOn) = 108
+    uint8_t packet[108];
+    size_t packet_size = use_secure ? 108 : 102;
+
     memset(packet, 0xFF, 6);
     for (int i = 0; i < 16; i++)
     {
-        memcpy(&packet[6 + (i * 6)], mac_addr_hex, 6);
+        memcpy(&packet[6 + (i * 6)], mac_hex, 6);
     }
 
-    // Create UDP Socket
+    if (use_secure)
+    {
+        memcpy(&packet[102], secure_hex, 6);
+    }
+
     int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
     if (sock < 0)
-    {
-        ESP_LOGE(TAG, "Unable to create socket: errno %d", errno);
         return ESP_FAIL;
-    }
 
-    // Set Socket Options to allow Broadcast
     int broadcast_permission = 1;
-    if (setsockopt(sock, SOL_SOCKET, SO_BROADCAST, &broadcast_permission, sizeof(broadcast_permission)) < 0)
-    {
-        ESP_LOGE(TAG, "Failed to set broadcast option: errno %d", errno);
-        close(sock);
-        return ESP_FAIL;
-    }
+    setsockopt(sock, SOL_SOCKET, SO_BROADCAST, &broadcast_permission, sizeof(broadcast_permission));
 
-    // 4. Set Destination Address (Standard WoL Port 9)
     struct sockaddr_in dest_addr;
-    dest_addr.sin_addr.s_addr = htonl(INADDR_BROADCAST); // 255.255.255.255
     dest_addr.sin_family = AF_INET;
     dest_addr.sin_port = htons(9);
 
-    // Send the packet
-    int err = sendto(sock, packet, sizeof(packet), 0, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
-    if (err < 0)
+    // Use user IP if provided, otherwise fallback to global broadcast
+    if (broadcast_str && strlen(broadcast_str) > 6)
     {
-        ESP_LOGE(TAG, "Error occurred during sending: errno %d", errno);
+        dest_addr.sin_addr.s_addr = inet_addr(broadcast_str);
     }
     else
     {
-        ESP_LOGI(TAG, "Magic Packet sent successfully!");
+        dest_addr.sin_addr.s_addr = htonl(INADDR_BROADCAST);
     }
+
+    int err = sendto(sock, packet, packet_size, 0, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
+    if (err < 0)
+        ESP_LOGE(TAG, "Sendto failed: %d", errno);
 
     close(sock);
     return (err < 0) ? ESP_FAIL : ESP_OK;
