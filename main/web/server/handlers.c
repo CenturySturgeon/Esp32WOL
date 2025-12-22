@@ -1,9 +1,11 @@
 #include "handlers.h"
-#include "../../auth/auth.h"
 #include "esp_http_server.h"
 #include "esp_https_server.h"
 #include "esp_log.h"
 #include <sys/param.h>
+
+#include "../../auth/auth.h"
+#include "../../utils/utils.h"
 
 #include "../views/copyIp.h"
 #include "../views/login.h"
@@ -248,82 +250,81 @@ esp_err_t get_wol_handler(httpd_req_t *req)
     return ESP_OK;
 }
 
-// Protected Route
 esp_err_t post_wol_handler(httpd_req_t *req)
 {
-    const size_t MAX_POST_SIZE = 128;
-
+    const size_t MAX_POST_SIZE = 256;
     char content[MAX_POST_SIZE];
-    memset(content, 0, sizeof(content));
 
     int total_len = req->content_len;
-    int cur_len = 0;
-    int received = 0;
-
-    if (total_len >= MAX_POST_SIZE)
+    if (total_len <= 0 || total_len >= MAX_POST_SIZE)
     {
-        ESP_LOGE(TAG, "POST data too large");
-        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Content too large");
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid content length");
         return ESP_FAIL;
     }
 
-    while (cur_len < total_len)
+    int received = httpd_req_recv(req, content, total_len);
+    if (received <= 0)
+        return ESP_FAIL;
+    content[received] = '\0';
+
+    // ESP_LOGI(TAG, "Full POST Body: %s", content);
+
+    char mac[32] = {0}, secure[32] = {0}, broadcast[32] = {0}, pin_str[16] = {0};
+
+    // Parse manually
+    // Split the string by '&' and then look for key=value
+    char *buf = content;
+    char *token = strtok_r(buf, "&", &buf);
+    while (token != NULL)
     {
-        received = httpd_req_recv(req,
-                                  content + cur_len,
-                                  total_len - cur_len);
-        if (received <= 0)
+        if (strncmp(token, "macAddress=", 11) == 0)
         {
-            ESP_LOGE(TAG, "Failed to receive POST data");
-            return ESP_FAIL;
+            strncpy(mac, token + 11, sizeof(mac) - 1);
         }
-        cur_len += received;
+        else if (strncmp(token, "secureOn=", 9) == 0)
+        {
+            strncpy(secure, token + 9, sizeof(secure) - 1);
+        }
+        else if (strncmp(token, "broadcastAddress=", 17) == 0)
+        {
+            strncpy(broadcast, token + 17, sizeof(broadcast) - 1);
+        }
+        else if (strncmp(token, "pin=", 4) == 0)
+        {
+            strncpy(pin_str, token + 4, sizeof(pin_str) - 1);
+        }
+        token = strtok_r(NULL, "&", &buf);
     }
 
-    content[cur_len] = '\0';
+    // Clean up URL encoding (%3A -> :)
+    url_decode(mac);
+    url_decode(secure);
+    url_decode(broadcast);
+    url_decode(pin_str);
 
-    ESP_LOGI(TAG, "POST body: %s", content);
+    // ESP_LOGI(TAG, "Parsed Results -> MAC: %s, PIN: %s, Broadcast: %s", mac, pin_str, broadcast);
 
-    // Extract pin
-    char pin[16] = {0};
+    char session_token[33];
+    uint32_t pin_code = strtoul(pin_str, NULL, 10);
 
-    char *pin_start = strstr(content, "pin=");
-    if (pin_start)
+    if (_get_cookie_value(req, "SESSIONID", session_token, sizeof(session_token)) == ESP_OK)
     {
-        pin_start += 4; // skip "pin="
-        char *pin_end = strchr(pin_start, '&');
-        size_t pin_len = pin_end ? (size_t)(pin_end - pin_start) : strlen(pin_start);
-
-        if (pin_len < sizeof(pin))
+        if (auth_check_session(session_token) == ESP_OK)
         {
-            strncpy(pin, pin_start, pin_len);
-            pin[pin_len] = '\0';
-            // ESP_LOGI(TAG, "PIN received: %s", pin);
-        }
-    }
-
-    char token[33];
-    uint32_t pin_code = strtoul(pin, NULL, 10);
-    if (_get_cookie_value(req, "SESSIONID", token, sizeof(token)) == ESP_OK)
-    {
-
-        if (auth_check_session(token) == ESP_OK)
-        {
-            // Authorized
-            ESP_LOGI(TAG, "Access granted to /wol");
-
-            if (auth_check_totp_request(token, pin_code) == ESP_OK)
+            if (auth_check_totp_request(session_token, pin_code) == ESP_OK)
             {
-                // Redirect to success status page
+
+                ESP_LOGI(TAG, "Success! Sending WOL packet");
+
                 httpd_resp_set_status(req, "303 See Other");
                 httpd_resp_set_hdr(req, "Location", "/status?s=success");
                 httpd_resp_send(req, NULL, 0);
+                return ESP_OK;
             }
         }
     }
 
-    // Unauthorized
-    ESP_LOGW(TAG, "Unauthorized access to /wol. Redirecting to Login.");
+    // ESP_LOGW(TAG, "Auth failed or PIN incorrect");
     httpd_resp_set_status(req, "303 See Other");
     httpd_resp_set_hdr(req, "Location", "/status?s=error");
     httpd_resp_send(req, NULL, 0);

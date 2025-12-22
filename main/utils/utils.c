@@ -101,6 +101,31 @@ esp_err_t get_public_ip(char *ip_buf, size_t ip_buf_len)
     return err;
 }
 
+// Decodes html urls (hmac's ":" are encoded to "%3A")
+void url_decode(char *src)
+{
+    char *dst = src;
+    while (*src)
+    {
+        if (*src == '%' && src[1] && src[2])
+        {
+            char hex[3] = {src[1], src[2], '\0'};
+            *dst++ = (char)strtol(hex, NULL, 16);
+            src += 3;
+        }
+        else if (*src == '+')
+        {
+            *dst++ = ' ';
+            src++;
+        }
+        else
+        {
+            *dst++ = *src++;
+        }
+    }
+    *dst = '\0';
+}
+
 esp_err_t send_wol_packet(const uint8_t *mac_addr_hex)
 {
     // Create the Magic Packet (6 * 0xFF + 16 * MAC)
