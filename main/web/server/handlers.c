@@ -93,21 +93,21 @@ esp_err_t https_redirect_handler(httpd_req_t *req)
     return ESP_OK;
 }
 
-esp_err_t copyIp_handler(httpd_req_t *req)
+esp_err_t get_copyIp_handler(httpd_req_t *req)
 {
     httpd_resp_set_type(req, "text/html");
     httpd_resp_send(req, copyIp_html, HTTPD_RESP_USE_STRLEN);
     return ESP_OK;
 }
 
-esp_err_t login_handler(httpd_req_t *req)
+esp_err_t get_login_handler(httpd_req_t *req)
 {
     httpd_resp_set_type(req, "text/html");
     httpd_resp_send(req, login_html, HTTPD_RESP_USE_STRLEN);
     return ESP_OK;
 }
 
-esp_err_t login_post_handler(httpd_req_t *req)
+esp_err_t post_login_handler(httpd_req_t *req)
 {
     char content[128]; // Buffer for body (username=x&password=y)
     size_t recv_size = MIN(req->content_len, sizeof(content));
@@ -217,7 +217,7 @@ static esp_err_t _get_cookie_value(httpd_req_t *req, const char *cookie_name, ch
 }
 
 // Protected Route
-esp_err_t wol_handler(httpd_req_t *req)
+esp_err_t get_wol_handler(httpd_req_t *req)
 {
     char token[33];
     if (_get_cookie_value(req, "SESSIONID", token, sizeof(token)) == ESP_OK)
@@ -229,6 +229,35 @@ esp_err_t wol_handler(httpd_req_t *req)
             ESP_LOGI(TAG, "Access granted to /wol");
             httpd_resp_set_type(req, "text/html");
             httpd_resp_send(req, wol_html, HTTPD_RESP_USE_STRLEN);
+            return ESP_OK;
+        }
+    }
+
+    // Unauthorized
+    ESP_LOGW(TAG, "Unauthorized access to /wol. Redirecting to Login.");
+    httpd_resp_set_status(req, "303 See Other");
+    httpd_resp_set_hdr(req, "Location", "/login");
+    httpd_resp_send(req, NULL, 0);
+    return ESP_OK;
+}
+
+// Protected Route
+esp_err_t post_wol_handler(httpd_req_t *req)
+{
+    char token[33];
+    if (_get_cookie_value(req, "SESSIONID", token, sizeof(token)) == ESP_OK)
+    {
+
+        if (auth_check_session(token) == ESP_OK)
+        {
+            // Authorized
+            ESP_LOGI(TAG, "Access granted to /wol");
+            
+            // Redirect to success status page
+            httpd_resp_set_status(req, "303 See Other");
+            httpd_resp_set_hdr(req, "Location", "/login");
+            httpd_resp_send(req, NULL, 0);
+
             return ESP_OK;
         }
     }

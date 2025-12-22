@@ -85,26 +85,26 @@ httpd_handle_t start_https_server(void)
         httpd_uri_t copyIp = {
             .uri = "/copyIp",
             .method = HTTP_GET,
-            .handler = copyIp_handler,
+            .handler = get_copyIp_handler,
             .user_ctx = NULL};
 
         httpd_uri_t login_get = {
             .uri = "/login",
             .method = HTTP_GET,
-            .handler = login_handler,
+            .handler = get_login_handler,
             .user_ctx = NULL};
 
         httpd_uri_t login_post = {
             .uri = "/login",
             .method = HTTP_POST,
-            .handler = login_post_handler,
+            .handler = post_login_handler,
             .user_ctx = NULL};
 
         // Protected
         httpd_uri_t wol_get = {
             .uri = "/wol",
             .method = HTTP_GET,
-            .handler = wol_handler,
+            .handler = get_wol_handler,
             .user_ctx = NULL};
 
         httpd_register_uri_handler(https_server, &root);
