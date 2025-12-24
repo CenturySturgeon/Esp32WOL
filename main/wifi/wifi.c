@@ -233,10 +233,33 @@ void wifi_event_handler(void *arg, esp_event_base_t event_base,
 
 void wifi_init_sta(const char *ssid, const char *pass)
 {
-    // Initialize telegram queue (before wifi so its redy immediately)
     telegram_system_init();
+    esp_netif_t *sta_netif = esp_netif_create_default_wifi_sta();
 
-    esp_netif_create_default_wifi_sta();
+    esp_netif_ip_info_t ip_info;
+    bool static_enabled = false;
+
+    if (auth_get_static_ip_config(&ip_info, &static_enabled) == ESP_OK && static_enabled)
+    {
+        // MUST stop DHCP client early
+        ESP_ERROR_CHECK(esp_netif_dhcpc_stop(sta_netif));
+
+        // Set IP info
+        ESP_ERROR_CHECK(esp_netif_set_ip_info(sta_netif, &ip_info));
+
+        // Set the DNS server
+        esp_netif_dns_info_t dns;
+        dns.ip.type = IPADDR_TYPE_V4;
+        esp_netif_str_to_ip4("8.8.8.8", &dns.ip.u_addr.ip4);
+        ESP_ERROR_CHECK(esp_netif_set_dns_info(sta_netif, ESP_NETIF_DNS_MAIN, &dns));
+
+        ESP_LOGI(TAG, "Static IP configured: " IPSTR, IP2STR(&ip_info.ip));
+    }
+    else
+    {
+        ESP_LOGI(TAG, "Using DHCP");
+    }
+
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
 
