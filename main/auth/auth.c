@@ -102,6 +102,59 @@ esp_err_t auth_get_wifi_credentials(char *ssid, size_t ssid_len, char *pass, siz
     return err;
 }
 
+esp_err_t auth_get_static_ip_config(
+    esp_netif_ip_info_t *ip_info,
+    bool *static_enabled)
+{
+    if (!ip_info || !static_enabled)
+        return ESP_ERR_INVALID_ARG;
+
+    nvs_handle_t handle;
+    esp_err_t err = nvs_open_from_partition(
+        "storage", "storage", NVS_READONLY, &handle);
+    if (err != ESP_OK)
+        return err;
+
+    uint8_t enabled = 0;
+    err = nvs_get_u8(handle, "use_static_ip", &enabled);
+    if (err != ESP_OK || enabled == 0)
+    {
+        *static_enabled = false;
+        nvs_close(handle);
+        return ESP_OK;
+    }
+
+    char ip[16], gw[16], mask[16];
+    size_t len;
+
+    len = sizeof(ip);
+    err = nvs_get_str(handle, "static_ip", ip, &len);
+    if (err != ESP_OK)
+        goto fail;
+
+    len = sizeof(gw);
+    err = nvs_get_str(handle, "router_gw", gw, &len);
+    if (err != ESP_OK)
+        goto fail;
+
+    len = sizeof(mask);
+    err = nvs_get_str(handle, "router_mask", mask, &len);
+    if (err != ESP_OK)
+        goto fail;
+
+    esp_netif_str_to_ip4(ip, &ip_info->ip);
+    esp_netif_str_to_ip4(gw, &ip_info->gw);
+    esp_netif_str_to_ip4(mask, &ip_info->netmask);
+
+    *static_enabled = true;
+    nvs_close(handle);
+    return ESP_OK;
+
+fail:
+    nvs_close(handle);
+    return err;
+}
+
 esp_err_t auth_get_telegram_secrets(char *token, size_t token_len, char *chat_id, size_t chat_id_len)
 {
     nvs_handle_t handle;
