@@ -6,6 +6,7 @@
 #include "../auth/auth.h"
 #include "../web/server/server.h"
 #include "../utils/utils.h"
+#include "../utils/ipify/ipify.h"
 
 static const char *TAG = "WIFI";
 
