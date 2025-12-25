@@ -71,10 +71,9 @@ esp_err_t nvs_init_and_load_secrets()
 
     ESP_LOGI(TAG, "System secrets loaded");
 
-    auth_mutex = xSemaphoreCreateMutex();
-    if (!auth_mutex)
+    if (auth_semaphore_init() != ESP_OK)
     {
-        ESP_LOGE(TAG, "Failed to create auth mutex");
+        nvs_close(handle);
         return ESP_FAIL;
     }
 

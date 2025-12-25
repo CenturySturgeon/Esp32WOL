@@ -17,7 +17,24 @@ uint8_t total_users_count = 0;
 
 static uint8_t MAX_FAILED_LOGINS = 5;
 static uint8_t failed_login_count = 0;
-SemaphoreHandle_t auth_mutex = NULL;
+static SemaphoreHandle_t auth_mutex = NULL;
+
+esp_err_t auth_semaphore_init()
+{
+    if (auth_mutex != NULL)
+    {
+        return ESP_OK;
+    }
+
+    auth_mutex = xSemaphoreCreateMutex();
+    if (auth_mutex == NULL)
+    {
+        ESP_LOGE(TAG, "Failed to create auth mutex");
+        return ESP_FAIL;
+    }
+
+    return ESP_OK;
+}
 
 static void auth_register_failed_login(void)
 {
