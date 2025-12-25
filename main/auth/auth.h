@@ -1,3 +1,4 @@
+#pragma once
 #ifndef AUTH_H
 #define AUTH_H
 
@@ -22,6 +23,8 @@ typedef struct
     char session_token[33]; // 32 chars + null
     int64_t session_expiry; // Timestamp in microseconds
 } user_session_t;
+
+extern user_session_t *users_list;
 
 esp_err_t auth_login_user(const char *username, const char *password, char *out_token);
 esp_err_t auth_check_session(const char *token);
