@@ -164,7 +164,8 @@ esp_err_t post_login_handler(httpd_req_t *req)
     ESP_LOGI(TAG, "Login attempt for user: %s", user);
 
     char session_token[33];
-    if (auth_login_user(user, pass, session_token) == ESP_OK)
+    uint8_t user_ttl;
+    if (auth_login_user(user, pass, session_token, &user_ttl) == ESP_OK)
     {
 
         // Success: Set Cookie and Redirect
@@ -172,7 +173,7 @@ esp_err_t post_login_handler(httpd_req_t *req)
         // Note: 'Secure' ensures it only travels via HTTPS. 'HttpOnly' hides it from JS.
         snprintf(cookie_header, sizeof(cookie_header),
                  "SESSIONID=%s; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=%d",
-                 session_token, users_list[0].ttl);
+                 session_token, user_ttl);
         httpd_resp_set_hdr(req, "Set-Cookie", cookie_header);
 
         ESP_LOGI(TAG, "Login success. Redirecting to /wol");

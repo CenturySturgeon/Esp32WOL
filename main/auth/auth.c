@@ -68,7 +68,7 @@ static void auth_reset_failed_logins(void)
     ESP_LOGI(TAG, "Failed login counter reset");
 }
 
-esp_err_t auth_login_user(const char *username, const char *password, char *out_token)
+esp_err_t auth_login_user(const char *username, const char *password, char *out_token, uint8_t *ttl_out)
 {
     if (!users_list || !username || !password)
         return ESP_FAIL;
