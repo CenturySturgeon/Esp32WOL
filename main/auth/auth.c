@@ -255,6 +255,7 @@ esp_err_t auth_check_session(const char *token)
             else
             {
                 ESP_LOGW(TAG, "Session expired for user: %s", users_list[i].name);
+                auth_logout_user(token);
                 return ESP_FAIL;
             }
         }
