@@ -25,9 +25,10 @@ typedef struct
 } user_session_t;
 
 esp_err_t auth_set_user_list(user_session_t *list, uint8_t count);
+esp_err_t auth_logout_user(const char *token);
+esp_err_t auth_logout_all_users();
 esp_err_t auth_login_user(const char *username, const char *password, char *out_token, uint8_t *ttl_out);
 esp_err_t auth_check_session(const char *token);
-esp_err_t auth_get_user_hmac_via_token(const char *token, uint8_t *hmac_out, size_t *hmac_len);
 esp_err_t auth_check_totp_request(const char *token, const uint32_t pin);
 esp_err_t auth_semaphore_init();
 

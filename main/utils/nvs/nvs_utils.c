@@ -17,8 +17,10 @@ static const char *TAG = "NVS_UTILS";
 
 esp_err_t nvs_init_and_load_secrets()
 {
+    ESP_LOGI(TAG, "Initializing NVS...");
 
-    if (nvs_already_initialized) {
+    if (nvs_already_initialized)
+    {
         return ESP_OK;
     }
 
@@ -92,6 +94,7 @@ esp_err_t nvs_init_and_load_secrets()
 
 esp_err_t nvs_get_wifi_credentials(char *ssid, size_t ssid_len, char *pass, size_t pass_len)
 {
+    ESP_LOGI(TAG, "Getting WIFI credentials...");
     nvs_handle_t handle;
     // Open the custom 'storage' partition
     esp_err_t err = nvs_open_from_partition("storage", "storage", NVS_READONLY, &handle);
@@ -111,6 +114,7 @@ esp_err_t nvs_get_wifi_credentials(char *ssid, size_t ssid_len, char *pass, size
 
 esp_err_t nvs_get_static_ip_config(esp_netif_ip_info_t *ip_info, bool *static_enabled)
 {
+    ESP_LOGI(TAG, "Setting static IP config...");
     if (!ip_info || !static_enabled)
         return ESP_ERR_INVALID_ARG;
 
@@ -162,6 +166,7 @@ fail:
 
 esp_err_t nvs_get_telegram_secrets(char *token, size_t token_len, char *chat_id, size_t chat_id_len)
 {
+    ESP_LOGI(TAG, "Getting telegram secrets...");
     nvs_handle_t handle;
     esp_err_t err = nvs_open_from_partition("storage", "storage", NVS_READONLY, &handle);
     if (err != ESP_OK)

@@ -24,6 +24,73 @@ static uint8_t MAX_FAILED_LOGINS = 5;
 static uint8_t failed_login_count = 0;
 static SemaphoreHandle_t auth_mutex = NULL;
 
+static void auth_register_failed_login(void)
+{
+    xSemaphoreTake(auth_mutex, portMAX_DELAY);
+
+    failed_login_count++;
+    ESP_LOGW(TAG, "Failed login attempt %d/%d",
+             failed_login_count, MAX_FAILED_LOGINS);
+
+    if (failed_login_count >= MAX_FAILED_LOGINS)
+    {
+        if (https_server)
+        {
+            ESP_LOGE(TAG, "Max failed logins reached. Stopping HTTPS server.");
+            char msg[128] = "🚨 Too Many Bad Login Attempts 🚨\nServer shutdown!";
+            post_message_to_queue(msg, false);
+            httpd_ssl_stop(https_server);
+            https_server = NULL;
+        }
+    }
+
+    xSemaphoreGive(auth_mutex);
+}
+
+static void auth_reset_failed_logins(void)
+{
+    xSemaphoreTake(auth_mutex, portMAX_DELAY);
+    failed_login_count = 0;
+    xSemaphoreGive(auth_mutex);
+
+    ESP_LOGI(TAG, "Failed login counter reset");
+}
+
+static esp_err_t auth_get_user_hmac_via_token(const char *token, uint8_t *hmac_out, size_t *hmac_len)
+{
+    if (!token || !hmac_out || !hmac_len)
+    {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    if (!users_list || total_users_count == 0)
+    {
+        return ESP_ERR_NOT_FOUND;
+    }
+
+    for (int i = 0; i < total_users_count; i++)
+    {
+        if (strcmp(users_list[i].session_token, token) == 0)
+        {
+
+            size_t stored_len = sizeof(users_list[i].hmac);
+
+            if (*hmac_len < stored_len)
+            {
+                *hmac_len = stored_len;
+                return ESP_ERR_NO_MEM;
+            }
+
+            memcpy(hmac_out, users_list[i].hmac, stored_len);
+            *hmac_len = stored_len;
+
+            return ESP_OK;
+        }
+    }
+
+    return ESP_ERR_NOT_FOUND;
+}
+
 esp_err_t auth_set_user_list(user_session_t *list, uint8_t count)
 {
     // Prevent re-running after initialization (boot/reboot)
@@ -57,36 +124,49 @@ esp_err_t auth_semaphore_init()
     return ESP_OK;
 }
 
-static void auth_register_failed_login(void)
+esp_err_t auth_logout_user(const char *token)
 {
+    if (!users_list || !token)
+        return ESP_ERR_INVALID_ARG;
+
     xSemaphoreTake(auth_mutex, portMAX_DELAY);
 
-    failed_login_count++;
-    ESP_LOGW(TAG, "Failed login attempt %d/%d",
-             failed_login_count, MAX_FAILED_LOGINS);
-
-    if (failed_login_count >= MAX_FAILED_LOGINS)
+    for (int i = 0; i < total_users_count; i++)
     {
-        if (https_server)
+        if (strcmp(users_list[i].session_token, token) == 0)
         {
-            ESP_LOGE(TAG, "Max failed logins reached. Stopping HTTPS server.");
-            char msg[128] = "🚨 Too Many Bad Login Attempts 🚨\nServer shutdown!";
-            post_message_to_queue(msg, false);
-            httpd_ssl_stop(https_server);
-            https_server = NULL;
+            memset(users_list[i].session_token, 0, sizeof(users_list[i].session_token));
+            users_list[i].session_expiry = 0;
+
+            ESP_LOGI(TAG, "User %s logged out successfully", users_list[i].name);
+
+            xSemaphoreGive(auth_mutex);
+            return ESP_OK;
         }
     }
 
     xSemaphoreGive(auth_mutex);
+    ESP_LOGW(TAG, "No user found with token %s", token);
+    return ESP_ERR_NOT_FOUND;
 }
 
-static void auth_reset_failed_logins(void)
+esp_err_t auth_logout_all_users()
 {
+    if (!users_list)
+        return ESP_ERR_INVALID_ARG;
+
     xSemaphoreTake(auth_mutex, portMAX_DELAY);
-    failed_login_count = 0;
+
+    for (int i = 0; i < total_users_count; i++)
+    {
+        memset(users_list[i].session_token, 0, sizeof(users_list[i].session_token));
+        users_list[i].session_expiry = 0;
+    }
+
     xSemaphoreGive(auth_mutex);
 
-    ESP_LOGI(TAG, "Failed login counter reset");
+    ESP_LOGI(TAG, "All users have been logged out");
+    return ESP_OK;
 }
 
 esp_err_t auth_login_user(const char *username, const char *password, char *out_token, uint8_t *ttl_out)
@@ -169,6 +249,7 @@ esp_err_t auth_check_session(const char *token)
                 // Optional: extend session on activity?
                 // users_list[i].session_expiry = now + (users_list[i].ttl * 60 * 1000000LL);
                 ESP_LOGI(TAG, "Session valid for user: %s", users_list[i].name);
+                auth_logout_user(token);
                 return ESP_OK;
             }
             else
@@ -179,44 +260,6 @@ esp_err_t auth_check_session(const char *token)
         }
     }
     return ESP_FAIL;
-}
-
-esp_err_t auth_get_user_hmac_via_token(
-    const char *token,
-    uint8_t *hmac_out,
-    size_t *hmac_len)
-{
-    if (!token || !hmac_out || !hmac_len)
-    {
-        return ESP_ERR_INVALID_ARG;
-    }
-
-    if (!users_list || total_users_count == 0)
-    {
-        return ESP_ERR_NOT_FOUND;
-    }
-
-    for (int i = 0; i < total_users_count; i++)
-    {
-        if (strcmp(users_list[i].session_token, token) == 0)
-        {
-
-            size_t stored_len = sizeof(users_list[i].hmac);
-
-            if (*hmac_len < stored_len)
-            {
-                *hmac_len = stored_len;
-                return ESP_ERR_NO_MEM;
-            }
-
-            memcpy(hmac_out, users_list[i].hmac, stored_len);
-            *hmac_len = stored_len;
-
-            return ESP_OK;
-        }
-    }
-
-    return ESP_ERR_NOT_FOUND;
 }
 
 esp_err_t auth_check_totp_request(const char *token, const uint32_t pin)
@@ -236,6 +279,7 @@ esp_err_t auth_check_totp_request(const char *token, const uint32_t pin)
     if (err != ESP_OK)
     {
         ESP_LOGW(TAG, "User HMAC not found");
+        auth_logout_user(token);
         auth_register_failed_login();
         return ESP_FAIL;
     }
@@ -246,7 +290,8 @@ esp_err_t auth_check_totp_request(const char *token, const uint32_t pin)
 
         if (!valid)
         {
-            ESP_LOGE(TAG, "ACCESS DENIED");
+            ESP_LOGE(TAG, "TOTP request denied!");
+            auth_logout_user(token);
             auth_register_failed_login();
             return ESP_FAIL;
         }
