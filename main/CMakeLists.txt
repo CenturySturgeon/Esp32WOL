@@ -7,7 +7,7 @@ idf_component_register(
          "utils/telegram/telegram.c"
          "utils/telegram/queue.c"
          "utils/utils.c"
-         "web/server/handlers.c"
+         "web/handlers/handlers.c"
          "web/server/server.c"
          "wifi/wifi.c"
     INCLUDE_DIRS "."

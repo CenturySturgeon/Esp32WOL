@@ -1,6 +1,6 @@
 #include "server.h"
 #include "esp_log.h"
-#include "handlers.h"
+#include "../handlers/handlers.h"
 
 httpd_handle_t http_server = NULL;
 httpd_handle_t https_server = NULL;
