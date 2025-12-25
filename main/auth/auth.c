@@ -249,7 +249,6 @@ esp_err_t auth_check_session(const char *token)
                 // Optional: extend session on activity?
                 // users_list[i].session_expiry = now + (users_list[i].ttl * 60 * 1000000LL);
                 ESP_LOGI(TAG, "Session valid for user: %s", users_list[i].name);
-                auth_logout_user(token);
                 return ESP_OK;
             }
             else
