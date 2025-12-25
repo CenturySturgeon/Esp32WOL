@@ -19,14 +19,14 @@ void app_main(void)
     ESP_ERROR_CHECK(esp_event_loop_create_default());
 
     // Initialize custom NVS storage
-    init_and_load_secrets();
+    nvs_init_and_load_secrets();
 
     // Temporary local buffers
     char temp_ssid[32] = {0};
     char temp_pass[64] = {0};
 
     // Load from NVS into temporary buffers
-    if (auth_get_wifi_credentials(temp_ssid, sizeof(temp_ssid), temp_pass, sizeof(temp_pass)) == ESP_OK)
+    if (nvs_get_wifi_credentials(temp_ssid, sizeof(temp_ssid), temp_pass, sizeof(temp_pass)) == ESP_OK)
     {
 
         // Start Wi-Fi with these credentials

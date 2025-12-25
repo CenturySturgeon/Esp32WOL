@@ -21,10 +21,10 @@ typedef struct
     int64_t session_expiry; // Timestamp in microseconds
 } user_session_t;
 
-esp_err_t init_and_load_secrets();
-esp_err_t auth_get_wifi_credentials(char *ssid, size_t ssid_len, char *pass, size_t pass_len);
-esp_err_t auth_get_static_ip_config(esp_netif_ip_info_t *ip_info, bool *static_enabled);
-esp_err_t auth_get_telegram_secrets(char *token, size_t token_len, char *chat_id, size_t chat_id_len);
+esp_err_t nvs_init_and_load_secrets();
+esp_err_t nvs_get_wifi_credentials(char *ssid, size_t ssid_len, char *pass, size_t pass_len);
+esp_err_t nvs_get_static_ip_config(esp_netif_ip_info_t *ip_info, bool *static_enabled);
+esp_err_t nvs_get_telegram_secrets(char *token, size_t token_len, char *chat_id, size_t chat_id_len);
 
 esp_err_t auth_login_user(const char *username, const char *password, char *out_token);
 esp_err_t auth_check_session(const char *token);

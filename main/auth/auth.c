@@ -19,7 +19,7 @@ static uint8_t MAX_FAILED_LOGINS = 5;
 static uint8_t failed_login_count = 0;
 static SemaphoreHandle_t auth_mutex = NULL;
 
-esp_err_t init_and_load_secrets()
+esp_err_t nvs_init_and_load_secrets()
 {
     // Initialize NVS for the custom 'storage' partition
     // During production, you'll swap 'nvs_flash_init_partition'
@@ -85,7 +85,7 @@ esp_err_t init_and_load_secrets()
     return ESP_OK;
 }
 
-esp_err_t auth_get_wifi_credentials(char *ssid, size_t ssid_len, char *pass, size_t pass_len)
+esp_err_t nvs_get_wifi_credentials(char *ssid, size_t ssid_len, char *pass, size_t pass_len)
 {
     nvs_handle_t handle;
     // Open the custom 'storage' partition
@@ -104,7 +104,7 @@ esp_err_t auth_get_wifi_credentials(char *ssid, size_t ssid_len, char *pass, siz
     return err;
 }
 
-esp_err_t auth_get_static_ip_config(esp_netif_ip_info_t *ip_info, bool *static_enabled)
+esp_err_t nvs_get_static_ip_config(esp_netif_ip_info_t *ip_info, bool *static_enabled)
 {
     if (!ip_info || !static_enabled)
         return ESP_ERR_INVALID_ARG;
@@ -155,7 +155,7 @@ fail:
     return err;
 }
 
-esp_err_t auth_get_telegram_secrets(char *token, size_t token_len, char *chat_id, size_t chat_id_len)
+esp_err_t nvs_get_telegram_secrets(char *token, size_t token_len, char *chat_id, size_t chat_id_len)
 {
     nvs_handle_t handle;
     esp_err_t err = nvs_open_from_partition("storage", "storage", NVS_READONLY, &handle);

@@ -21,7 +21,7 @@ esp_err_t send_telegram_message_sync(const char *message, bool silent)
     char url[128] = {0};
 
     // Fetch secrets
-    if (auth_get_telegram_secrets(token, sizeof(token), chat_id, sizeof(chat_id)) != ESP_OK)
+    if (nvs_get_telegram_secrets(token, sizeof(token), chat_id, sizeof(chat_id)) != ESP_OK)
     {
         return ESP_FAIL;
     }

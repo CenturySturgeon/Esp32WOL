@@ -52,7 +52,7 @@ void wifi_init_sta(const char *ssid, const char *pass)
     esp_netif_ip_info_t ip_info;
     bool static_enabled = false;
 
-    if (auth_get_static_ip_config(&ip_info, &static_enabled) == ESP_OK && static_enabled)
+    if (nvs_get_static_ip_config(&ip_info, &static_enabled) == ESP_OK && static_enabled)
     {
         // MUST stop DHCP client early
         ESP_ERROR_CHECK(esp_netif_dhcpc_stop(sta_netif));
