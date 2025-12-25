@@ -3,6 +3,8 @@ idf_component_register(
          "auth/auth.c"
          "auth/totp.c"
          "utils/ipify/ipify.c"
+         "utils/telegram/telegram.c"
+         "utils/telegram/queue.c"
          "utils/utils.c"
          "web/server/handlers.c"
          "web/server/server.c"

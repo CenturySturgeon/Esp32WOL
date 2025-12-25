@@ -5,7 +5,7 @@
 
 #include "../auth/auth.h"
 #include "../web/server/server.h"
-#include "../utils/utils.h"
+#include "../utils/telegram/queue.h"
 #include "../utils/ipify/ipify.h"
 
 static const char *TAG = "WIFI";
@@ -65,7 +65,7 @@ static void public_ip_management_task(void *pvParameters)
             initial_ip_got = true;
 
             // Notify via Queue (note format string directly)
-            telegram_post_to_queue("Esp32 online 🚀\nhttps://%s", true, public_ip);
+            post_message_to_queue("Esp32 online 🚀\nhttps://%s", true, public_ip);
         }
         else
         {
@@ -90,7 +90,7 @@ static void public_ip_management_task(void *pvParameters)
                 memset(public_ip, 0, sizeof(public_ip));
                 strncpy(public_ip, temp_ip, sizeof(public_ip) - 1);
 
-                telegram_post_to_queue("Public IP change to:\nhttps://%s", true, public_ip);
+                post_message_to_queue("Public IP change to:\nhttps://%s", true, public_ip);
             }
             else
             {
@@ -234,7 +234,7 @@ void wifi_event_handler(void *arg, esp_event_base_t event_base,
 
 void wifi_init_sta(const char *ssid, const char *pass)
 {
-    telegram_system_init();
+    initialize_notifications_queue();
     esp_netif_t *sta_netif = esp_netif_create_default_wifi_sta();
 
     esp_netif_ip_info_t ip_info;

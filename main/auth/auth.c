@@ -1,12 +1,13 @@
-#include "auth.h"
-#include "esp_random.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "mbedtls/sha256.h"
 
+#include "esp_random.h"
+
+#include "auth.h"
 #include "totp.h"
 #include "../web/server/server.h"
-#include "../utils/utils.h"
+#include "../utils/telegram/queue.h"
 
 static const char *TAG = "AUTH_SYSTEM";
 
@@ -186,7 +187,7 @@ static void auth_register_failed_login(void)
         {
             ESP_LOGE(TAG, "Max failed logins reached. Stopping HTTPS server.");
             char msg[128] = "🚨 Too Many Bad Login Attempts 🚨\nServer shutdown!";
-            telegram_post_to_queue(msg, false);
+            post_message_to_queue(msg, false);
             httpd_ssl_stop(https_server);
             https_server = NULL;
         }
