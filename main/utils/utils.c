@@ -13,6 +13,7 @@ static const char *TAG = "UTILS";
 // Decodes html urls (hmac's ":" are encoded to "%3A")
 void url_decode(char *src)
 {
+    ESP_LOGD(TAG, "URL decode...");
     char *dst = src;
     while (*src)
     {
@@ -37,6 +38,7 @@ void url_decode(char *src)
 
 void bytes_to_hex(const unsigned char *src, char *dest, int len)
 {
+    ESP_LOGD(TAG, "Converting bytes to HEX...");
     for (int i = 0; i < len; i++)
     {
         sprintf(dest + (i * 2), "%02x", src[i]);

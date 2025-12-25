@@ -12,12 +12,22 @@
 
 static const char *TAG = "AUTH_SYSTEM";
 
-user_session_t *users_list = NULL;
-uint8_t total_users_count = 0;
+static user_session_t *users_list = NULL;
+static uint8_t total_users_count = 0;
 
 static uint8_t MAX_FAILED_LOGINS = 5;
 static uint8_t failed_login_count = 0;
 static SemaphoreHandle_t auth_mutex = NULL;
+
+esp_err_t auth_set_user_list(user_session_t *list, uint8_t count)
+{
+    if (list == NULL && count > 0)
+        return ESP_ERR_INVALID_ARG;
+
+    users_list = list;
+    total_users_count = count;
+    return ESP_OK;
+}
 
 esp_err_t auth_semaphore_init()
 {
