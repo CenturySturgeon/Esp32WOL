@@ -4,6 +4,7 @@ idf_component_register(
          "auth/totp.c"
          "utils/ipify/ipify.c"
          "utils/network/network.c"
+         "utils/nvs/nvs_utils.c"
          "utils/telegram/telegram.c"
          "utils/telegram/queue.c"
          "utils/utils.c"

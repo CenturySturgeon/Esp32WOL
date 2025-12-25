@@ -1,9 +1,11 @@
+#include <stdio.h>
+#include "sdkconfig.h"
+
 #include "esp_log.h"
 #include "esp_netif.h"
-#include "sdkconfig.h"
-#include <stdio.h>
+#include "nvs_flash.h"
 
-#include "./auth/auth.h"
+#include "./utils/nvs/nvs_utils.h"
 #include "./wifi/wifi.h"
 
 /* -------- APP MAIN -------- */

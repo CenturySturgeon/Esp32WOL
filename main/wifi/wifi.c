@@ -16,6 +16,7 @@
 #include "../auth/auth.h"
 #include "./ntp_sync/ntp_sync.h"
 #include "../utils/telegram/queue.h"
+#include "../utils/nvs/nvs_utils.h"
 
 static const char *TAG = "WIFI";
 

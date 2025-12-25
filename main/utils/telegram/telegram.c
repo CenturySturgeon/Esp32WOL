@@ -1,11 +1,12 @@
 #include <string.h>
 #include <stdbool.h>
 
-#include "telegram.h"
-#include "../../auth/auth.h"
-
 #include "esp_log.h"
 #include "esp_http_client.h"
+
+#include "telegram.h"
+#include "../../auth/auth.h"
+#include "../nvs/nvs_utils.h"
 
 extern const char telegram_pem_start[] asm("_binary_telegram_pem_start");
 extern const char telegram_pem_end[] asm("_binary_telegram_pem_end");
