@@ -9,6 +9,8 @@ idf_component_register(
          "utils/utils.c"
          "web/handlers/handlers.c"
          "web/server/server.c"
+         "wifi/ntp_sync/ntp_sync.c"
+         "wifi/public_ip/public_ip.c"
          "wifi/wifi.c"
     INCLUDE_DIRS "."
     REQUIRES esp_https_server nvs_flash esp_netif esp_wifi esp_http_client mdns esp_timer
