@@ -11,10 +11,17 @@
 #include "nvs_utils.h"
 #include "../../auth/auth.h"
 
+static bool nvs_already_initialized = false;
+
 static const char *TAG = "NVS_UTILS";
 
 esp_err_t nvs_init_and_load_secrets()
 {
+
+    if (nvs_already_initialized) {
+        return ESP_OK;
+    }
+
     esp_err_t err = nvs_flash_init_partition("storage");
     if (err != ESP_OK)
         return err;
