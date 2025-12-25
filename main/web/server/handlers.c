@@ -5,6 +5,7 @@
 #include <sys/param.h>
 
 #include "../../auth/auth.h"
+#include "../../utils/network/network.h"
 #include "../../utils/utils.h"
 
 #include "../views/copyIp.h"

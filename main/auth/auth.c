@@ -6,6 +6,7 @@
 
 #include "auth.h"
 #include "totp.h"
+#include "../utils/utils.h"
 #include "../web/server/server.h"
 #include "../utils/telegram/queue.h"
 
@@ -103,9 +104,7 @@ esp_err_t auth_get_wifi_credentials(char *ssid, size_t ssid_len, char *pass, siz
     return err;
 }
 
-esp_err_t auth_get_static_ip_config(
-    esp_netif_ip_info_t *ip_info,
-    bool *static_enabled)
+esp_err_t auth_get_static_ip_config(esp_netif_ip_info_t *ip_info, bool *static_enabled)
 {
     if (!ip_info || !static_enabled)
         return ESP_ERR_INVALID_ARG;
@@ -203,15 +202,6 @@ static void auth_reset_failed_logins(void)
     xSemaphoreGive(auth_mutex);
 
     ESP_LOGI(TAG, "Failed login counter reset");
-}
-
-void bytes_to_hex(const unsigned char *src, char *dest, int len)
-{
-    for (int i = 0; i < len; i++)
-    {
-        sprintf(dest + (i * 2), "%02x", src[i]);
-    }
-    dest[len * 2] = 0;
 }
 
 esp_err_t auth_login_user(const char *username, const char *password, char *out_token)
