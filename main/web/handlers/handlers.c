@@ -17,6 +17,44 @@ extern char public_ip[64]; // Telling the compiler "trust me this exists somewhe
 
 static const char *TAG = "ROUTE";
 
+static esp_err_t _get_cookie_value(httpd_req_t *req, const char *cookie_name, char *val, size_t val_size)
+{
+    size_t hdr_len = httpd_req_get_hdr_value_len(req, "Cookie");
+    if (hdr_len == 0)
+        return ESP_FAIL;
+
+    char *cookie_buf = malloc(hdr_len + 1);
+    if (!cookie_buf)
+        return ESP_ERR_NO_MEM;
+
+    if (httpd_req_get_hdr_value_str(req, "Cookie", cookie_buf, hdr_len + 1) != ESP_OK)
+    {
+        free(cookie_buf);
+        return ESP_FAIL;
+    }
+
+    char *found = strstr(cookie_buf, cookie_name);
+    if (!found)
+    {
+        free(cookie_buf);
+        return ESP_FAIL;
+    }
+
+    // Move pointer to value
+    found += strlen(cookie_name) + 1; // +1 for '='
+
+    int i = 0;
+    while (found[i] && found[i] != ';' && found[i] != ' ' && i < val_size - 1)
+    {
+        val[i] = found[i];
+        i++;
+    }
+    val[i] = 0;
+
+    free(cookie_buf);
+    return ESP_OK;
+}
+
 esp_err_t http_redirect_handler(httpd_req_t *req)
 {
     const int HTTPD_MAX_URI_LEN = 512;
@@ -191,44 +229,6 @@ esp_err_t post_login_handler(httpd_req_t *req)
     return ESP_OK;
 }
 
-static esp_err_t _get_cookie_value(httpd_req_t *req, const char *cookie_name, char *val, size_t val_size)
-{
-    size_t hdr_len = httpd_req_get_hdr_value_len(req, "Cookie");
-    if (hdr_len == 0)
-        return ESP_FAIL;
-
-    char *cookie_buf = malloc(hdr_len + 1);
-    if (!cookie_buf)
-        return ESP_ERR_NO_MEM;
-
-    if (httpd_req_get_hdr_value_str(req, "Cookie", cookie_buf, hdr_len + 1) != ESP_OK)
-    {
-        free(cookie_buf);
-        return ESP_FAIL;
-    }
-
-    char *found = strstr(cookie_buf, cookie_name);
-    if (!found)
-    {
-        free(cookie_buf);
-        return ESP_FAIL;
-    }
-
-    // Move pointer to value
-    found += strlen(cookie_name) + 1; // +1 for '='
-
-    int i = 0;
-    while (found[i] && found[i] != ';' && found[i] != ' ' && i < val_size - 1)
-    {
-        val[i] = found[i];
-        i++;
-    }
-    val[i] = 0;
-
-    free(cookie_buf);
-    return ESP_OK;
-}
-
 // Protected Route
 esp_err_t get_wol_handler(httpd_req_t *req)
 {
@@ -319,6 +319,7 @@ esp_err_t post_wol_handler(httpd_req_t *req)
             {
 
                 ESP_LOGI(TAG, "Success! Sending WOL packet");
+                auth_logout_user(session_token);
                 send_wol_packet(mac, secure, broadcast);
 
                 httpd_resp_set_status(req, "303 See Other");
