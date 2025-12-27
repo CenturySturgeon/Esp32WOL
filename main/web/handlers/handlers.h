@@ -12,6 +12,7 @@ esp_err_t https_redirect_handler(httpd_req_t *req);
 esp_err_t get_copyIp_handler(httpd_req_t *req);
 esp_err_t get_login_handler(httpd_req_t *req);
 esp_err_t get_status_handler(httpd_req_t *req);
+esp_err_t get_service_check_handler(httpd_req_t *req);
 esp_err_t get_wol_handler(httpd_req_t *req);
 
 // POST handlers

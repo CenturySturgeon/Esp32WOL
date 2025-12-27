@@ -10,6 +10,7 @@
 
 #include "../views/copyIp.h"
 #include "../views/login.h"
+#include "../views/service_check.h"
 #include "../views/status.h"
 #include "../views/wol.h"
 
@@ -229,7 +230,7 @@ esp_err_t post_login_handler(httpd_req_t *req)
     return ESP_OK;
 }
 
-// Protected Route
+// Protected Routes
 esp_err_t get_wol_handler(httpd_req_t *req)
 {
     char token[33];
@@ -248,6 +249,30 @@ esp_err_t get_wol_handler(httpd_req_t *req)
 
     // Unauthorized
     ESP_LOGW(TAG, "Unauthorized access to /wol. Redirecting to Login.");
+    httpd_resp_set_status(req, "303 See Other");
+    httpd_resp_set_hdr(req, "Location", "/login");
+    httpd_resp_send(req, NULL, 0);
+    return ESP_OK;
+}
+
+esp_err_t get_service_check_handler(httpd_req_t *req)
+{
+    char token[33];
+    if (_get_cookie_value(req, "SESSIONID", token, sizeof(token)) == ESP_OK)
+    {
+
+        if (auth_check_session(token) == ESP_OK)
+        {
+            // Authorized
+            ESP_LOGI(TAG, "Access granted to /serviceCheck");
+            httpd_resp_set_type(req, "text/html");
+            httpd_resp_send(req, serviceCheck_html, HTTPD_RESP_USE_STRLEN);
+            return ESP_OK;
+        }
+    }
+
+    // Unauthorized
+    ESP_LOGW(TAG, "Unauthorized access to /serviceCheck. Redirecting to Login.");
     httpd_resp_set_status(req, "303 See Other");
     httpd_resp_set_hdr(req, "Location", "/login");
     httpd_resp_send(req, NULL, 0);

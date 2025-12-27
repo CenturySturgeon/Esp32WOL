@@ -107,6 +107,12 @@ httpd_handle_t start_https_server(void)
             .handler = get_wol_handler,
             .user_ctx = NULL};
 
+        httpd_uri_t serviceCheck_get = {
+            .uri = "/serviceCheck",
+            .method = HTTP_GET,
+            .handler = get_service_check_handler,
+            .user_ctx = NULL};
+
         httpd_uri_t login_post = {
             .uri = "/login",
             .method = HTTP_POST,
@@ -124,6 +130,7 @@ httpd_handle_t start_https_server(void)
         httpd_register_uri_handler(https_server, &copyIp);
         httpd_register_uri_handler(https_server, &login_get);
         httpd_register_uri_handler(https_server, &status_get);
+        httpd_register_uri_handler(https_server, &serviceCheck_get);
         httpd_register_uri_handler(https_server, &wol_get);
 
         httpd_register_uri_handler(https_server, &login_post);
