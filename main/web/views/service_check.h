@@ -103,13 +103,13 @@ static const char serviceCheck_html[] = R"HTML(
       </div>
 
       <div class="input-group">
-        <button class="input" type="submit" formaction="ping">
+        <button class="input" type="submit" formaction="/ping">
           Ping Hosts
         </button>
       </div>
 
       <div class="input-group">
-        <button class="input" type="submit" formaction="statusCheck">
+        <button class="input" type="submit" formaction="/serviceCheck">
           Check Services
         </button>
       </div>

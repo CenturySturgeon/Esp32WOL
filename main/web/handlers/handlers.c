@@ -361,3 +361,139 @@ esp_err_t post_wol_handler(httpd_req_t *req)
     httpd_resp_send(req, NULL, 0);
     return ESP_OK;
 }
+
+esp_err_t post_ping_handler(httpd_req_t *req)
+{
+    const size_t MAX_POST_SIZE = 128;
+    char content[MAX_POST_SIZE];
+
+    int total_len = req->content_len;
+    if (total_len <= 0 || total_len >= MAX_POST_SIZE)
+    {
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid content length");
+        return ESP_FAIL;
+    }
+
+    int received = httpd_req_recv(req, content, total_len);
+    if (received <= 0)
+        return ESP_FAIL;
+    content[received] = '\0';
+
+    // ESP_LOGI(TAG, "Full POST Body: %s", content);
+
+    char pin_str[16] = {0};
+
+    // Parse manually
+    // Split the string by '&' and then look for key=value
+    char *buf = content;
+    char *token = strtok_r(buf, "&", &buf);
+    while (token != NULL)
+    {
+        if (strncmp(token, "pin=", 4) == 0)
+        {
+            strncpy(pin_str, token + 4, sizeof(pin_str) - 1);
+        }
+        token = strtok_r(NULL, "&", &buf);
+    }
+
+    // Clean up URL encoding (%3A -> :)
+    url_decode(pin_str);
+
+    // ESP_LOGI(TAG, "Parsed Results -> PIN: %s", pin_str);
+
+    char session_token[33];
+    uint32_t pin_code = strtoul(pin_str, NULL, 10);
+
+    if (_get_cookie_value(req, "SESSIONID", session_token, sizeof(session_token)) == ESP_OK)
+    {
+        if (auth_check_session(session_token) == ESP_OK)
+        {
+            if (auth_check_totp_request(session_token, pin_code) == ESP_OK)
+            {
+
+                ESP_LOGI(TAG, "Success! Pinging hosts");
+                auth_logout_user(session_token);
+                // Ping hosts here
+
+                httpd_resp_set_status(req, "303 See Other");
+                httpd_resp_set_hdr(req, "Location", "/status?s=success");
+                httpd_resp_send(req, NULL, 0);
+                return ESP_OK;
+            }
+        }
+    }
+
+    // ESP_LOGW(TAG, "Auth failed or PIN incorrect");
+    httpd_resp_set_status(req, "303 See Other");
+    httpd_resp_set_hdr(req, "Location", "/status?s=error");
+    httpd_resp_send(req, NULL, 0);
+    return ESP_OK;
+}
+
+esp_err_t post_serviceCheck_handler(httpd_req_t *req)
+{
+    const size_t MAX_POST_SIZE = 128;
+    char content[MAX_POST_SIZE];
+
+    int total_len = req->content_len;
+    if (total_len <= 0 || total_len >= MAX_POST_SIZE)
+    {
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid content length");
+        return ESP_FAIL;
+    }
+
+    int received = httpd_req_recv(req, content, total_len);
+    if (received <= 0)
+        return ESP_FAIL;
+    content[received] = '\0';
+
+    // ESP_LOGI(TAG, "Full POST Body: %s", content);
+
+    char pin_str[16] = {0};
+
+    // Parse manually
+    // Split the string by '&' and then look for key=value
+    char *buf = content;
+    char *token = strtok_r(buf, "&", &buf);
+    while (token != NULL)
+    {
+        if (strncmp(token, "pin=", 4) == 0)
+        {
+            strncpy(pin_str, token + 4, sizeof(pin_str) - 1);
+        }
+        token = strtok_r(NULL, "&", &buf);
+    }
+
+    // Clean up URL encoding (%3A -> :)
+    url_decode(pin_str);
+
+    // ESP_LOGI(TAG, "Parsed Results -> PIN: %s", pin_str);
+
+    char session_token[33];
+    uint32_t pin_code = strtoul(pin_str, NULL, 10);
+
+    if (_get_cookie_value(req, "SESSIONID", session_token, sizeof(session_token)) == ESP_OK)
+    {
+        if (auth_check_session(session_token) == ESP_OK)
+        {
+            if (auth_check_totp_request(session_token, pin_code) == ESP_OK)
+            {
+
+                ESP_LOGI(TAG, "Success! Checking services..");
+                auth_logout_user(session_token);
+                // Check services here
+
+                httpd_resp_set_status(req, "303 See Other");
+                httpd_resp_set_hdr(req, "Location", "/status?s=success");
+                httpd_resp_send(req, NULL, 0);
+                return ESP_OK;
+            }
+        }
+    }
+
+    // ESP_LOGW(TAG, "Auth failed or PIN incorrect");
+    httpd_resp_set_status(req, "303 See Other");
+    httpd_resp_set_hdr(req, "Location", "/status?s=error");
+    httpd_resp_send(req, NULL, 0);
+    return ESP_OK;
+}

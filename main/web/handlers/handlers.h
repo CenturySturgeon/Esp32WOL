@@ -17,6 +17,8 @@ esp_err_t get_wol_handler(httpd_req_t *req);
 
 // POST handlers
 esp_err_t post_login_handler(httpd_req_t *req);
+esp_err_t post_ping_handler(httpd_req_t *req);
+esp_err_t post_serviceCheck_handler(httpd_req_t *req);
 esp_err_t post_wol_handler(httpd_req_t *req);
 
 typedef enum

@@ -15,6 +15,7 @@ static uint8_t MAX_HTTP_SOCKETS = 5;
 static uint8_t MAX_HTTPS_SOCKETS = 7;
 static uint8_t TCP_HANDSHAKE_LINGER_TIMEOUT = 90; // Keep connections alive for less time to free resources faster
 static bool LRU_PURGE = true;                     // Purge connections with LRU algo
+static uint8_t MAX_URI_HANDLERS = 12;             // Modify this if you need more handlers
 
 static redirect_type_t redirect_copy_ip = REDIRECT_COPY_IP;
 static redirect_type_t redirect_login = REDIRECT_LOGIN;
@@ -65,6 +66,7 @@ httpd_handle_t start_https_server(void)
     conf.httpd.max_open_sockets = MAX_HTTPS_SOCKETS;
     conf.httpd.lru_purge_enable = LRU_PURGE;
     conf.httpd.linger_timeout = TCP_HANDSHAKE_LINGER_TIMEOUT;
+    conf.httpd.max_uri_handlers = MAX_URI_HANDLERS;
 
     if (httpd_ssl_start(&https_server, &conf) == ESP_OK)
     {
@@ -119,22 +121,69 @@ httpd_handle_t start_https_server(void)
             .handler = post_login_handler,
             .user_ctx = NULL};
 
+        httpd_uri_t ping_post = {
+            .uri = "/ping",
+            .method = HTTP_POST,
+            .handler = post_ping_handler,
+            .user_ctx = NULL};
+
+        httpd_uri_t serviceCheck_post = {
+            .uri = "/serviceCheck",
+            .method = HTTP_POST,
+            .handler = post_serviceCheck_handler,
+            .user_ctx = NULL};
+
         httpd_uri_t wol_post = {
             .uri = "/wol",
             .method = HTTP_POST,
             .handler = post_wol_handler,
             .user_ctx = NULL};
 
-        httpd_register_uri_handler(https_server, &root);
-        httpd_register_uri_handler(https_server, &ip);
-        httpd_register_uri_handler(https_server, &copyIp);
-        httpd_register_uri_handler(https_server, &login_get);
-        httpd_register_uri_handler(https_server, &status_get);
-        httpd_register_uri_handler(https_server, &serviceCheck_get);
-        httpd_register_uri_handler(https_server, &wol_get);
+        if (httpd_register_uri_handler(https_server, &root) != ESP_OK)
+        {
+            ESP_LOGE(TAG, "Failed to register route! Check MAX_URI_HANDLERS");
+        }
+        if (httpd_register_uri_handler(https_server, &ip) != ESP_OK)
+        {
+            ESP_LOGE(TAG, "Failed to register route! Check MAX_URI_HANDLERS");
+        }
+        if (httpd_register_uri_handler(https_server, &copyIp) != ESP_OK)
+        {
+            ESP_LOGE(TAG, "Failed to register route! Check MAX_URI_HANDLERS");
+        }
+        if (httpd_register_uri_handler(https_server, &login_get) != ESP_OK)
+        {
+            ESP_LOGE(TAG, "Failed to register route! Check MAX_URI_HANDLERS");
+        }
+        if (httpd_register_uri_handler(https_server, &status_get) != ESP_OK)
+        {
+            ESP_LOGE(TAG, "Failed to register route! Check MAX_URI_HANDLERS");
+        }
+        if (httpd_register_uri_handler(https_server, &serviceCheck_get) != ESP_OK)
+        {
+            ESP_LOGE(TAG, "Failed to register route! Check MAX_URI_HANDLERS");
+        }
+        if (httpd_register_uri_handler(https_server, &wol_get) != ESP_OK)
+        {
+            ESP_LOGE(TAG, "Failed to register route! Check MAX_URI_HANDLERS");
+        }
 
-        httpd_register_uri_handler(https_server, &login_post);
-        httpd_register_uri_handler(https_server, &wol_post);
+        if (httpd_register_uri_handler(https_server, &login_post) != ESP_OK)
+        {
+            ESP_LOGE(TAG, "Failed to register route! Check MAX_URI_HANDLERS");
+        }
+        if (httpd_register_uri_handler(https_server, &ping_post) != ESP_OK)
+        {
+            ESP_LOGE(TAG, "Failed to register route! Check MAX_URI_HANDLERS");
+        }
+        if (httpd_register_uri_handler(https_server, &serviceCheck_post) != ESP_OK)
+        {
+            ESP_LOGE(TAG, "Failed to register route! Check MAX_URI_HANDLERS");
+        }
+        if (httpd_register_uri_handler(https_server, &wol_post) != ESP_OK)
+        {
+            ESP_LOGE(TAG, "Failed to register route! Check MAX_URI_HANDLERS");
+        }
 
         return https_server;
     }
