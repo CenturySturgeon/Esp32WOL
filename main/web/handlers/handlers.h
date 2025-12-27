@@ -2,6 +2,7 @@
 #ifndef HANDLERS_H
 #define HANDLERS_H
 
+#include "esp_err.h"
 #include "esp_http_server.h"
 
 // Redirects
@@ -20,11 +21,5 @@ esp_err_t post_login_handler(httpd_req_t *req);
 esp_err_t post_ping_handler(httpd_req_t *req);
 esp_err_t post_serviceCheck_handler(httpd_req_t *req);
 esp_err_t post_wol_handler(httpd_req_t *req);
-
-typedef enum
-{
-    REDIRECT_COPY_IP,
-    REDIRECT_LOGIN,
-} redirect_type_t;
 
 #endif // HANDLERS_H

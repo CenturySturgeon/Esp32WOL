@@ -1,11 +1,13 @@
-#include "handlers.h"
+#include <sys/param.h>
+
 #include "esp_http_server.h"
 #include "esp_https_server.h"
 #include "esp_log.h"
-#include <sys/param.h>
 
+#include "handlers.h"
 #include "../../auth/auth.h"
 #include "../../utils/network/network.h"
+#include "../routes/routes.h"
 #include "../../utils/utils.h"
 
 #include "../views/copyIp.h"

@@ -9,6 +9,7 @@ idf_component_register(
          "utils/telegram/queue.c"
          "utils/utils.c"
          "web/handlers/handlers.c"
+         "web/routes/routes.c"
          "web/server/server.c"
          "wifi/ntp_sync/ntp_sync.c"
          "wifi/public_ip/public_ip.c"

@@ -1,6 +1,7 @@
 #include "server.h"
 #include "esp_log.h"
 #include "../handlers/handlers.h"
+#include "../routes/routes.h"
 
 httpd_handle_t http_server = NULL;
 httpd_handle_t https_server = NULL;
@@ -16,9 +17,6 @@ static uint8_t MAX_HTTPS_SOCKETS = 7;
 static uint8_t TCP_HANDSHAKE_LINGER_TIMEOUT = 90; // Keep connections alive for less time to free resources faster
 static bool LRU_PURGE = true;                     // Purge connections with LRU algo
 static uint8_t MAX_URI_HANDLERS = 12;             // Modify this if you need more handlers
-
-static redirect_type_t redirect_copy_ip = REDIRECT_COPY_IP;
-static redirect_type_t redirect_login = REDIRECT_LOGIN;
 
 static const char *TAG = "SERVER";
 
@@ -39,13 +37,7 @@ httpd_handle_t start_http_redirect_server(void)
     {
         ESP_LOGI(TAG, "HTTP redirect server started on port %d", config.server_port);
 
-        httpd_uri_t root = {
-            .uri = "/*",
-            .method = HTTP_GET,
-            .handler = http_redirect_handler,
-            .user_ctx = NULL};
-
-        httpd_register_uri_handler(server, &root);
+        httpd_register_uri_handler(server, &http_root);
         return server;
     }
 
@@ -71,73 +63,6 @@ httpd_handle_t start_https_server(void)
     if (httpd_ssl_start(&https_server, &conf) == ESP_OK)
     {
         ESP_LOGI(TAG, "HTTPS server started on port %d", conf.port_secure);
-
-        httpd_uri_t root = {
-            .uri = "/",
-            .method = HTTP_GET,
-            .handler = https_redirect_handler,
-            .user_ctx = &redirect_login};
-
-        httpd_uri_t ip = {
-            .uri = "/ip",
-            .method = HTTP_GET,
-            .handler = https_redirect_handler,
-            .user_ctx = &redirect_copy_ip};
-
-        httpd_uri_t copyIp = {
-            .uri = "/copyIp",
-            .method = HTTP_GET,
-            .handler = get_copyIp_handler,
-            .user_ctx = NULL};
-
-        httpd_uri_t login_get = {
-            .uri = "/login",
-            .method = HTTP_GET,
-            .handler = get_login_handler,
-            .user_ctx = NULL};
-
-        httpd_uri_t status_get = {
-            .uri = "/status",
-            .method = HTTP_GET,
-            .handler = get_status_handler,
-            .user_ctx = NULL};
-
-        // Protected
-        httpd_uri_t wol_get = {
-            .uri = "/wol",
-            .method = HTTP_GET,
-            .handler = get_wol_handler,
-            .user_ctx = NULL};
-
-        httpd_uri_t serviceCheck_get = {
-            .uri = "/serviceCheck",
-            .method = HTTP_GET,
-            .handler = get_service_check_handler,
-            .user_ctx = NULL};
-
-        httpd_uri_t login_post = {
-            .uri = "/login",
-            .method = HTTP_POST,
-            .handler = post_login_handler,
-            .user_ctx = NULL};
-
-        httpd_uri_t ping_post = {
-            .uri = "/ping",
-            .method = HTTP_POST,
-            .handler = post_ping_handler,
-            .user_ctx = NULL};
-
-        httpd_uri_t serviceCheck_post = {
-            .uri = "/serviceCheck",
-            .method = HTTP_POST,
-            .handler = post_serviceCheck_handler,
-            .user_ctx = NULL};
-
-        httpd_uri_t wol_post = {
-            .uri = "/wol",
-            .method = HTTP_POST,
-            .handler = post_wol_handler,
-            .user_ctx = NULL};
 
         if (httpd_register_uri_handler(https_server, &root) != ESP_OK)
         {
