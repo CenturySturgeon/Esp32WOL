@@ -1,3 +1,4 @@
+#pragma once
 #ifndef TELEGRAM_H
 #define TELEGRAM_H
 
