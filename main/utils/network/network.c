@@ -24,14 +24,14 @@ static void cmd_ping_on_ping_success(esp_ping_handle_t hdl, void *args)
     esp_ping_get_profile(hdl, ESP_PING_PROF_SIZE, &recv_len, sizeof(recv_len));
     esp_ping_get_profile(hdl, ESP_PING_PROF_TIMEGAP, &elapsed_time, sizeof(elapsed_time));
 
-    ESP_LOGD(TAG, "%d bytes from %s icmp_seq=%d ttl=%d time=%d ms\n", recv_len, ip4addr_ntoa(&target_addr.u_addr.ip4), seqno, ttl, elapsed_time);
+    ESP_LOGD(TAG, "%d bytes icmp_seq=%d ttl=%d time=%d ms", recv_len, seqno, ttl, elapsed_time);
 }
 
 static void cmd_ping_on_ping_timeout(esp_ping_handle_t hdl, void *args)
 {
     uint16_t seqno;
     esp_ping_get_profile(hdl, ESP_PING_PROF_SEQNO, &seqno, sizeof(seqno));
-    ESP_LOGD(TAG, "From ping: timeout icmp_seq=%d\n", seqno);
+    ESP_LOGD(TAG, "From ping: timeout icmp_seq=%d", seqno);
 }
 
 static void cmd_ping_on_ping_end(esp_ping_handle_t hdl, void *args)
