@@ -124,7 +124,7 @@ esp_err_t send_wol_packet(const char *mac_str, const char *secure_str, const cha
     int broadcast_permission = 1;
     setsockopt(sock, SOL_SOCKET, SO_BROADCAST, &broadcast_permission, sizeof(broadcast_permission));
 
-    struct sockaddr_in dest_addr;
+    struct sockaddr_in dest_addr = {0};
     dest_addr.sin_family = AF_INET;
     dest_addr.sin_port = htons(9);
 
@@ -144,4 +144,97 @@ esp_err_t send_wol_packet(const char *mac_str, const char *secure_str, const cha
 
     close(sock);
     return (err < 0) ? ESP_FAIL : ESP_OK;
+}
+
+esp_err_t service_check(const char *ip_str, uint16_t port, int timeout_ms)
+{
+    struct sockaddr_in dest_addr = {0};
+    dest_addr.sin_addr.s_addr = inet_addr(ip_str);
+    dest_addr.sin_family = AF_INET;
+    dest_addr.sin_port = htons(port);
+
+    int sock = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
+    if (sock < 0)
+    {
+        ESP_LOGE(TAG, "Unable to create socket: errno %d", errno);
+        return ESP_FAIL;
+    }
+
+    // Set socket to Non-Blocking mode
+    int flags = fcntl(sock, F_GETFL, 0);
+    if (flags < 0)
+    {
+        close(sock);
+        return ESP_FAIL;
+    }
+    fcntl(sock, F_SETFL, flags | O_NONBLOCK);
+
+    ESP_LOGI(TAG, "Checking service (Non-blocking)...");
+
+    int err = connect(sock, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
+
+    // If connect returns 0 immediately, it connected instantly (rare on remote, possible on localhost)
+    if (err == 0)
+    {
+        ESP_LOGI(TAG, "Connected immediately!");
+        close(sock);
+        return ESP_OK;
+    }
+
+    // If err is -1, we expect errno to be EINPROGRESS (connection started but not finished)
+    if (errno != EINPROGRESS)
+    {
+        ESP_LOGW(TAG, "Connection failed immediately: errno %d", errno);
+        close(sock);
+        return ESP_FAIL;
+    }
+
+    // Use select() to wait for the socket to become writable (connected) or timeout
+    fd_set fdset;
+    FD_ZERO(&fdset);
+    FD_SET(sock, &fdset);
+
+    struct timeval tv;
+    tv.tv_sec = timeout_ms / 1000;
+    tv.tv_usec = (timeout_ms % 1000) * 1000;
+
+    // select(max_fd + 1, read_set, write_set, error_set, timeout)
+    // Listen to the write_set because a socket becomes 'writable' when connected
+    int res = select(sock + 1, NULL, &fdset, NULL, &tv);
+
+    if (res < 0)
+    {
+        ESP_LOGE(TAG, "Select error: errno %d", errno);
+        close(sock);
+        return ESP_FAIL;
+    }
+    else if (res == 0)
+    {
+        ESP_LOGW(TAG, "Connection timed out after %d ms", timeout_ms);
+        close(sock);
+        return ESP_FAIL;
+    }
+    else
+    {
+        // Even if select returns > 0, the connection might have failed (e.g. refused)
+        int sock_err = 0;
+        socklen_t len = sizeof(sock_err);
+        if (getsockopt(sock, SOL_SOCKET, SO_ERROR, &sock_err, &len) < 0)
+        {
+            ESP_LOGE(TAG, "getsockopt failed");
+            close(sock);
+            return ESP_FAIL;
+        }
+
+        if (sock_err != 0)
+        {
+            ESP_LOGW(TAG, "Connection failed after select: error %d", sock_err);
+            close(sock);
+            return ESP_FAIL;
+        }
+
+        ESP_LOGI(TAG, "Service is available!");
+        close(sock);
+        return ESP_OK;
+    }
 }
