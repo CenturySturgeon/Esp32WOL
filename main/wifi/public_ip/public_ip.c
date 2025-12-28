@@ -5,6 +5,7 @@
 
 #include "public_ip.h"
 #include "../../utils/ipify/ipify.h"
+#include "../../utils/led/led_utils.h"
 #include "../../utils/telegram/queue.h"
 
 static const char *TAG = "PUBLIC_IP";
@@ -18,6 +19,9 @@ char public_ip[64] = {0};
 void public_ip_management_task(void *pvParameters)
 {
     ESP_LOGI(TAG, "Starting Public IP Management Task");
+
+    led_utils_set_blinks(3);
+
     char temp_ip[64]; // Temporary buffer to check for changes
 
     // Mandatory Boot Retrieval
@@ -33,6 +37,8 @@ void public_ip_management_task(void *pvParameters)
 
             // Notify via Queue (note format string directly)
             post_message_to_queue("Esp32 online 🚀\nhttps://%s", true, public_ip);
+
+            led_utils_set_blinks(0); // Turn off led
         }
         else
         {

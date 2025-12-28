@@ -5,6 +5,7 @@
 #include "esp_netif.h"
 #include "nvs_flash.h"
 
+#include "./utils/led/led_utils.h"
 #include "./utils/nvs/nvs_utils.h"
 #include "./wifi/wifi.h"
 
@@ -19,6 +20,10 @@ void app_main(void)
     ESP_ERROR_CHECK(nvs_flash_init());
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
+
+    // Initialize led blinker
+    led_utils_init();
+    led_utils_set_blinks(1); // Blink once per cycle
 
     // Initialize custom NVS storage
     nvs_init_and_load_secrets();

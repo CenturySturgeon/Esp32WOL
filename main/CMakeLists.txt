@@ -3,6 +3,7 @@ idf_component_register(
          "auth/auth.c"
          "auth/totp.c"
          "utils/ipify/ipify.c"
+         "utils/led/led_utils.c"
          "utils/network/network.c"
          "utils/nvs/nvs_utils.c"
          "utils/telegram/telegram.c"
@@ -15,7 +16,7 @@ idf_component_register(
          "wifi/public_ip/public_ip.c"
          "wifi/wifi.c"
     INCLUDE_DIRS "."
-    REQUIRES esp_https_server nvs_flash esp_netif esp_wifi esp_http_client mdns esp_timer
+    REQUIRES esp_https_server nvs_flash esp_netif esp_wifi esp_http_client mdns esp_driver_gpio esp_timer
     EMBED_FILES
         "web/certs/api_ipify.pem"
         "web/certs/server.der"

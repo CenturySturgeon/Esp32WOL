@@ -6,6 +6,7 @@
 
 #include "auth.h"
 #include "totp.h"
+#include "../utils/led/led_utils.h"
 #include "../utils/utils.h"
 #include "../web/server/server.h"
 #include "../utils/telegram/queue.h"
@@ -14,6 +15,7 @@ static const char *TAG = "AUTH_SYSTEM";
 
 static user_session_t *users_list = NULL;
 static uint8_t total_users_count = 0;
+
 // Instead of a simple true/false (which is easy to flip with 1 byte)
 // Uses a specific multi-bit pattern.
 #define AUTH_LOCKED_MAGIC 0x5A5A
@@ -36,11 +38,12 @@ static void auth_register_failed_login(void)
     {
         if (https_server)
         {
-            ESP_LOGE(TAG, "Max failed logins reached. Stopping HTTPS server.");
-            char msg[128] = "🚨 Too Many Bad Login Attempts 🚨\nServer shutdown!";
-            post_message_to_queue(msg, false);
             httpd_ssl_stop(https_server);
             https_server = NULL;
+            char msg[128] = "🚨 Too Many Bad Login Attempts 🚨\nServer shutdown!";
+            post_message_to_queue(msg, false);
+            led_utils_set_blinks(1); // Turn on the led indefinitely
+            ESP_LOGE(TAG, "Max failed logins reached. Stopping HTTPS server.");
         }
     }
 

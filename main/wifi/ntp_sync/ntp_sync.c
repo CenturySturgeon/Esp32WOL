@@ -9,6 +9,7 @@
 #include "esp_log.h"
 #include "esp_sntp.h"
 
+#include "../../utils/led/led_utils.h"
 #include "../../web/server/server.h"
 #include "../public_ip/public_ip.h"
 
@@ -49,6 +50,8 @@ static bool is_utc_night_time(void)
 void ntp_management_task(void *pvParameters)
 {
     ESP_LOGI(TAG, "Starting NTP Management Task");
+    led_utils_set_blinks(2);
+
     time_init_utc();
 
     esp_sntp_setoperatingmode(SNTP_OPMODE_POLL);
