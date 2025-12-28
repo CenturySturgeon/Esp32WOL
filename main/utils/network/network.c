@@ -226,7 +226,7 @@ esp_err_t network_set_host_list(host_t *list, uint8_t count)
 
 esp_err_t network_ping_all_hosts(void)
 {
-    ESP_LOGI(TAG, "Pinging al hosts...");
+    ESP_LOGI(TAG, "Pinging all hosts...");
     if (hosts_list == NULL || total_hosts_count == 0)
         return ESP_ERR_INVALID_STATE;
 

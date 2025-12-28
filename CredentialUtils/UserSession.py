@@ -137,6 +137,13 @@ class UserSession:
             "encoding": "hex2bin",
             "value": self.hmacKey.replace(", 0x","")[2:] # Crop commas, spaces and '0x' byte prefixes
         })
-        print(self.hmacKey)
+        hex_str = self.hmacKey.replace("0x", "").replace(",", "").replace(" ", "")
+        key_bytes = bytes.fromhex(hex_str)
+
+        # Base32 encode
+        base32_key = base64.b32encode(key_bytes).decode("ascii")
+
+        print("Arduino compatible HMAC Key: ", self.hmacKey)
+        print("Base32 HMAC key: ", base32_key)
 
         return rows

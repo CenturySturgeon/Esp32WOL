@@ -44,16 +44,16 @@ static esp_err_t nvs_load_hosts()
             char key[32];
             size_t required_size;
 
-            snprintf(key, sizeof(key), "alias_host_%d", i);
+            snprintf(key, sizeof(key), "alias_h_%d", i);
             required_size = sizeof(temp_list[i].alias);
             nvs_get_str(handle, key, temp_list[i].alias, &required_size);
 
-            snprintf(key, sizeof(key), "ip_host_%d", i);
+            snprintf(key, sizeof(key), "ip_h_%d", i);
             required_size = sizeof(temp_list[i].ip);
             nvs_get_str(handle, key, temp_list[i].ip, &required_size);
 
             // Load ports (can be empty)
-            snprintf(key, sizeof(key), "ports_host_%d", i);
+            snprintf(key, sizeof(key), "ports_h_%d", i);
             required_size = sizeof(temp_list[i].ports);
             nvs_get_str(handle, key, temp_list[i].ports, &required_size);
 
