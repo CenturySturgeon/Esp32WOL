@@ -120,50 +120,68 @@ static void run_services_scan_task(void *pvParameters)
     }
 
     // Header
-    strcat(report_buffer, "⚙️🟢 *Service Status* 🟢⚙️\n");
+    strcat(report_buffer, "⚙️ *Service Status* ⚙️\n");
 
     for (int i = 0; i < total_hosts_count; i++)
     {
         host_t *host = &hosts_list[i];
 
+        // ESP_LOGI(TAG, "Host %d", i);
+        // ESP_LOGI(TAG, "  Alias      : '%s'", host->alias);
+        // ESP_LOGI(TAG, "  IP         : '%s'", host->ip);
+        // ESP_LOGI(TAG, "  Ports      : '%s'", host->ports);
+        // ESP_LOGI(TAG, "  Port names : '%s'", host->port_names);
+
         // Skip if no ports defined
         if (strlen(host->ports) == 0)
             continue;
 
-        // Work on a copy of the string because strtok modifies it
+        // Work on a copy of the strings because strtok modifies them
         char ports_copy[64];
+        char names_copy[256];
         strncpy(ports_copy, host->ports, sizeof(ports_copy) - 1);
+        strncpy(names_copy, host->port_names, sizeof(names_copy) - 1);
         ports_copy[sizeof(ports_copy) - 1] = '\0';
+        names_copy[sizeof(names_copy) - 1] = '\0';
+
+        // ESP_LOGI(TAG, "  ports_copy : '%s'", ports_copy);
+        // ESP_LOGI(TAG, "  names_copy : '%s'", names_copy);
 
         int total_services = 0;
-        int up_services = 0;
-        char host_line[256] = {0};
-        char details[80] = {0};
+        char host_line[384] = {0};
+        char details[256] = {0};
 
-        // Tokenize "80|443|8080"
-        char *token = strtok(ports_copy, "|");
-        while (token != NULL)
+        // Tokenize both strings in parallel
+        char *port_saveptr;
+        char *name_saveptr;
+
+        char *port_token = strtok_r(ports_copy, "|", &port_saveptr);
+        char *name_token = strtok_r(names_copy, "|", &name_saveptr);
+
+        while (port_token != NULL && name_token != NULL)
         {
-            int port = atoi(token);
+            ESP_LOGI(TAG, "  Token pair: port='%s' name='%s'",
+                     port_token, name_token);
+
+            int port = atoi(port_token);
             if (port > 0)
             {
                 total_services++;
-                esp_err_t res = service_check(host->ip, port, 2000); // 2s timeout
+                esp_err_t res = service_check(host->ip, port, 2000);
 
-                char port_res[32];
-                snprintf(port_res, sizeof(port_res), "%d", port);
-                strcat(port_res, (res == ESP_OK) ? "⬆️ " : "⬇️ ");
+                char port_res[64];
+                snprintf(port_res, sizeof(port_res), "%s %s",
+                         name_token,
+                         (res == ESP_OK) ? "⬆️ " : "⬇️ ");
 
-                // Safety check for buffer overflow
                 if (strlen(details) + strlen(port_res) < sizeof(details))
                 {
                     strcat(details, port_res);
                 }
-
-                if (res == ESP_OK)
-                    up_services++;
             }
-            token = strtok(NULL, "|");
+
+            port_token = strtok_r(NULL, "|", &port_saveptr);
+            name_token = strtok_r(NULL, "|", &name_saveptr);
         }
 
         if (total_services > 0)
@@ -172,6 +190,7 @@ static void run_services_scan_task(void *pvParameters)
 
             if (strlen(report_buffer) + strlen(host_line) < 1023)
             {
+
                 strcat(report_buffer, host_line);
             }
         }

@@ -9,6 +9,7 @@ typedef struct
     char alias[64];
     char ip[32];
     char ports[64]; // stored as "443|80|8080"
+    char port_names[256]; // stored as "name 1|name 2|myname"
 } host_t;
 
 esp_err_t network_set_host_list(host_t *list, uint8_t count);

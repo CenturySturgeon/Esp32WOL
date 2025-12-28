@@ -56,6 +56,11 @@ static esp_err_t nvs_load_hosts()
             snprintf(key, sizeof(key), "ports_host_%d", i);
             required_size = sizeof(temp_list[i].ports);
             nvs_get_str(handle, key, temp_list[i].ports, &required_size);
+
+            // Load port names (can be empty)
+            snprintf(key, sizeof(key), "port_names_h_%d", i);
+            required_size = sizeof(temp_list[i].port_names);
+            nvs_get_str(handle, key, temp_list[i].port_names, &required_size);
         }
     }
 

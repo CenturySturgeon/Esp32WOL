@@ -69,11 +69,24 @@ with open("secrets.csv", "w", newline="") as csvfile:
     for i, host in enumerate(hosts):
         writer.writerow({"key":f"alias_host_{i}", "type":"data", "encoding":"string","value":host['alias']})
         writer.writerow({"key":f"ip_host_{i}", "type":"data", "encoding":"string","value":host['ip']})
-        if host.get('ports', '') != '':
-            joined_ports = '|'.join(str(port) for port in host['ports'])
-            writer.writerow({"key":f"ports_host_{i}", "type":"data", "encoding":"string","value":joined_ports})
+        
+        if host.get('ports', []) != []:
+            ports = host.get('ports')
+            joined_ports = ''
+            port_aliases = ''
+            
+            for port in ports:
+                joined_ports += str(port['port']) + '|'
+                if port.get('name', '') != '':
+                    port_aliases += str(port.get('name')) + '|'
+
+            if joined_ports != '': writer.writerow({"key":f"ports_host_{i}", "type":"data", "encoding":"string","value":joined_ports[:-1]}) # remove trailing '|'
+            if port_aliases != '': writer.writerow({"key":f"port_names_host_{i}", "type":"data", "encoding":"string","value":port_aliases[:-1]})
+            print('a', joined_ports, 'a')
+        
         else:
             writer.writerow({"key":f"ports_host_{i}", "type":"data", "encoding":"string","value":""})
+            writer.writerow({"key":f"port_names_host_{i}", "type":"data", "encoding":"string","value":""})
         
     # Write the user sessions
     for i in range(len(user_sessions)):
