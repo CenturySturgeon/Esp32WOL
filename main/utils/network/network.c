@@ -8,6 +8,9 @@
 
 #include "network.h"
 
+static host_t *hosts_list = NULL;
+static uint8_t total_hosts_count = 0;
+
 static const char *TAG = "NETWORK UTILS";
 
 // Callback for when a ping response is received or times out
@@ -40,6 +43,26 @@ static void cmd_ping_on_ping_end(esp_ping_handle_t hdl, void *args)
 
     // Delete session, free memory
     esp_ping_delete_session(hdl);
+}
+
+esp_err_t network_set_host_list(host_t *list, uint8_t count)
+{
+    ESP_LOGI(TAG, "Initializing hosts...");
+
+    if (hosts_list != NULL)
+    {
+        // Already initialized, prevent re-init
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    if (list == NULL && count > 0)
+    {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    hosts_list = list;
+    total_hosts_count = count;
+    return ESP_OK;
 }
 
 esp_err_t send_ping(const char *ip_str)

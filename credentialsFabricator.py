@@ -18,8 +18,11 @@ telegram_chat_id = os.getenv('TELEGRAM_CHAT_ID')
 
 totp_label = os.getenv('TOTP_LABEL')
 totp_issuer = os.getenv('TOTP_ISSUER')
+
 random_passwords = bool(os.getenv('SET_AUTO_RANDOM_PASSWORDS') in ['true', 'True'])
 user_sessions_data = json.loads(os.getenv('USER_SESSIONS'))
+
+hosts = json.loads(os.getenv('HOST_WATCHLIST'))
 
 static_ip_enabled = 0 # False by default
 user_sessions = [
@@ -40,6 +43,7 @@ with open("secrets.csv", "w", newline="") as csvfile:
     writer.writeheader()
     writer.writerow({"key":"storage", "type":"namespace", "encoding":"","value":""})
     writer.writerow({"key":"total_users", "type":"data", "encoding":"u8","value":len(user_sessions)})
+    writer.writerow({"key":"total_hosts", "type":"data", "encoding":"u8","value":len(hosts)})
 
     writer.writerow({"key":"wifi_ssid", "type":"data", "encoding":"string","value":wifi_name})
     writer.writerow({"key":"wifi_pass", "type":"data", "encoding":"string","value":wifi_password})
@@ -61,6 +65,16 @@ with open("secrets.csv", "w", newline="") as csvfile:
             hashed_password = session.generate_sha256_hash(new_user_password)
             session.accessHash = hashed_password
 
+    # Write the host's info
+    for i, host in enumerate(hosts):
+        writer.writerow({"key":f"alias_host_{i}", "type":"data", "encoding":"string","value":host['alias']})
+        writer.writerow({"key":f"ip_host_{i}", "type":"data", "encoding":"string","value":host['ip']})
+        if host.get('ports', '') != '':
+            joined_ports = '|'.join(str(port) for port in host['ports'])
+            writer.writerow({"key":f"ports_host_{i}", "type":"data", "encoding":"string","value":joined_ports})
+        else:
+            writer.writerow({"key":f"ports_host_{i}", "type":"data", "encoding":"string","value":""})
+        
     # Write the user sessions
     for i in range(len(user_sessions)):
         session = user_sessions[i]

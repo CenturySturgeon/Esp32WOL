@@ -10,26 +10,73 @@
 
 #include "nvs_utils.h"
 #include "../../auth/auth.h"
+#include "../network/network.h"
 
 static bool nvs_already_initialized = false;
 
 static const char *TAG = "NVS_UTILS";
 
-esp_err_t nvs_init_and_load_secrets()
+static esp_err_t nvs_load_hosts()
 {
-    ESP_LOGI(TAG, "Initializing NVS...");
+    ESP_LOGI(TAG, "Loading hosts from NVS...");
 
-    if (nvs_already_initialized)
-    {
-        return ESP_OK;
-    }
-
-    esp_err_t err = nvs_flash_init_partition("storage");
+    nvs_handle_t handle;
+    esp_err_t err = nvs_open_from_partition("storage", "storage", NVS_READONLY, &handle);
     if (err != ESP_OK)
         return err;
 
+    uint8_t count = 0;
+    nvs_get_u8(handle, "total_hosts", &count);
+
+    host_t *temp_list = NULL;
+
+    if (count > 0)
+    {
+        temp_list = malloc(sizeof(host_t) * count);
+        if (!temp_list)
+        {
+            nvs_close(handle);
+            return ESP_ERR_NO_MEM;
+        }
+
+        for (uint8_t i = 0; i < count; i++)
+        {
+            char key[32];
+            size_t required_size;
+
+            snprintf(key, sizeof(key), "alias_host_%d", i);
+            required_size = sizeof(temp_list[i].alias);
+            nvs_get_str(handle, key, temp_list[i].alias, &required_size);
+
+            snprintf(key, sizeof(key), "ip_host_%d", i);
+            required_size = sizeof(temp_list[i].ip);
+            nvs_get_str(handle, key, temp_list[i].ip, &required_size);
+
+            // Load ports (can be empty)
+            snprintf(key, sizeof(key), "ports_host_%d", i);
+            required_size = sizeof(temp_list[i].ports);
+            nvs_get_str(handle, key, temp_list[i].ports, &required_size);
+        }
+    }
+
+    // Hand it off to network.c
+    if (network_set_host_list(temp_list, count) != ESP_OK)
+    {
+        free(temp_list);
+        nvs_close(handle);
+        return ESP_FAIL;
+    }
+
+    nvs_close(handle);
+    return ESP_OK;
+}
+
+static esp_err_t nvs_load_sessions()
+{
+    ESP_LOGI(TAG, "Loading user sessions from NVS...");
+
     nvs_handle_t handle;
-    err = nvs_open_from_partition("storage", "storage", NVS_READONLY, &handle);
+    esp_err_t err = nvs_open_from_partition("storage", "storage", NVS_READONLY, &handle);
     if (err != ESP_OK)
         return err;
 
@@ -81,6 +128,33 @@ esp_err_t nvs_init_and_load_secrets()
         nvs_close(handle);
         return ESP_FAIL;
     }
+    nvs_close(handle);
+    return ESP_OK;
+}
+
+esp_err_t nvs_init_and_load_secrets()
+{
+    ESP_LOGI(TAG, "Initializing NVS...");
+
+    if (nvs_already_initialized)
+    {
+        return ESP_OK;
+    }
+
+    esp_err_t err = nvs_flash_init_partition("storage");
+    if (err != ESP_OK)
+        return err;
+
+    nvs_handle_t handle;
+    err = nvs_open_from_partition("storage", "storage", NVS_READONLY, &handle);
+    if (err != ESP_OK)
+        return err;
+
+    // Hand session data over to auth.c
+    nvs_load_sessions();
+
+    // Hand host data over to network.c
+    nvs_load_hosts();
 
     if (auth_semaphore_init() != ESP_OK)
     {
