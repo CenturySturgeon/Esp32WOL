@@ -485,7 +485,9 @@ esp_err_t post_serviceCheck_handler(httpd_req_t *req)
 
                 ESP_LOGI(TAG, "Success! Checking services..");
                 auth_logout_user(session_token);
-                // Check services here
+
+                // Scan host's services & send message to queue
+                network_scan_services();
 
                 httpd_resp_set_status(req, "303 See Other");
                 httpd_resp_set_hdr(req, "Location", "/status?s=success");

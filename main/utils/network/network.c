@@ -1,11 +1,13 @@
 #include <stdio.h>
 #include <string.h>
+#include <errno.h>
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
-#include "lwip/sockets.h"
 #include "lwip/netdb.h"
+#include "lwip/sockets.h"
+#include "lwip/sys.h"
 #include "esp_log.h"
 #include "ping/ping_sock.h"
 
@@ -105,6 +107,92 @@ static void check_all_hosts_task(void *pvParameters)
     vTaskDelete(NULL);
 }
 
+static void run_services_scan_task(void *pvParameters)
+{
+    // Allocate a large buffer for the report (on heap to save stack)
+    // Adjust size based on max hosts * max ports
+    char *report_buffer = calloc(1, 1024);
+    if (!report_buffer)
+    {
+        ESP_LOGE(TAG, "Failed to allocate report buffer");
+        vTaskDelete(NULL);
+        return;
+    }
+
+    // Header
+    strcat(report_buffer, "⚙️🟢 *Service Status* 🟢⚙️\n");
+
+    for (int i = 0; i < total_hosts_count; i++)
+    {
+        host_t *host = &hosts_list[i];
+
+        // Skip if no ports defined
+        if (strlen(host->ports) == 0)
+            continue;
+
+        // Work on a copy of the string because strtok modifies it
+        char ports_copy[64];
+        strncpy(ports_copy, host->ports, sizeof(ports_copy) - 1);
+        ports_copy[sizeof(ports_copy) - 1] = '\0';
+
+        int total_services = 0;
+        int up_services = 0;
+        char host_line[256] = {0};
+        char details[80] = {0};
+
+        // Tokenize "80|443|8080"
+        char *token = strtok(ports_copy, "|");
+        while (token != NULL)
+        {
+            int port = atoi(token);
+            if (port > 0)
+            {
+                total_services++;
+                esp_err_t res = service_check(host->ip, port, 2000); // 2s timeout
+
+                char port_res[32];
+                if (res == ESP_OK)
+                {
+                    snprintf(port_res, sizeof(port_res), "%d ", port);
+                }
+                else
+                {
+                    port_res[0] = '\0'; // nothing added
+                }
+
+                // Safety check for buffer overflow
+                if (strlen(details) + strlen(port_res) < sizeof(details))
+                {
+                    strcat(details, port_res);
+                }
+
+                if (res == ESP_OK)
+                    up_services++;
+            }
+            token = strtok(NULL, "|");
+        }
+
+        if (total_services > 0)
+        {
+            int percentage = (up_services * 100) / total_services;
+
+            snprintf(host_line, sizeof(host_line), "\n*%s*\n%s (%d%%)\n", host->alias, details, percentage);
+
+            if (strlen(report_buffer) + strlen(host_line) < 1023)
+            {
+                strcat(report_buffer, host_line);
+            }
+        }
+    }
+
+    ESP_LOGI(TAG, "Service scan complete. Sending message to queue...");
+
+    post_message_to_queue(report_buffer, false);
+
+    free(report_buffer);
+    vTaskDelete(NULL);
+}
+
 esp_err_t network_set_host_list(host_t *list, uint8_t count)
 {
     ESP_LOGI(TAG, "Initializing hosts...");
@@ -127,7 +215,7 @@ esp_err_t network_set_host_list(host_t *list, uint8_t count)
 
 esp_err_t network_ping_all_hosts(void)
 {
-    ESP_LOGI(TAG, "Pinging al hosts...")
+    ESP_LOGI(TAG, "Pinging al hosts...");
     if (hosts_list == NULL || total_hosts_count == 0)
         return ESP_ERR_INVALID_STATE;
 
@@ -206,7 +294,7 @@ esp_err_t send_wol_packet(const char *mac_str, const char *secure_str, const cha
 
 esp_err_t service_check(const char *ip_str, uint16_t port, int timeout_ms)
 {
-    struct sockaddr_in dest_addr = {0};
+    struct sockaddr_in dest_addr;
     dest_addr.sin_addr.s_addr = inet_addr(ip_str);
     dest_addr.sin_family = AF_INET;
     dest_addr.sin_port = htons(port);
@@ -220,34 +308,16 @@ esp_err_t service_check(const char *ip_str, uint16_t port, int timeout_ms)
 
     // Set socket to Non-Blocking mode
     int flags = fcntl(sock, F_GETFL, 0);
-    if (flags < 0)
-    {
-        close(sock);
-        return ESP_FAIL;
-    }
     fcntl(sock, F_SETFL, flags | O_NONBLOCK);
 
-    ESP_LOGI(TAG, "Checking service (Non-blocking)...");
-
     int err = connect(sock, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
-
-    // If connect returns 0 immediately, it connected instantly (rare on remote, possible on localhost)
-    if (err == 0)
+    if (err != 0 && errno != EINPROGRESS)
     {
-        ESP_LOGI(TAG, "Connected immediately!");
-        close(sock);
-        return ESP_OK;
-    }
-
-    // If err is -1, we expect errno to be EINPROGRESS (connection started but not finished)
-    if (errno != EINPROGRESS)
-    {
-        ESP_LOGW(TAG, "Connection failed immediately: errno %d", errno);
         close(sock);
         return ESP_FAIL;
     }
 
-    // Use select() to wait for the socket to become writable (connected) or timeout
+    // Wait for the socket to be writable (connected)
     fd_set fdset;
     FD_ZERO(&fdset);
     FD_SET(sock, &fdset);
@@ -256,43 +326,34 @@ esp_err_t service_check(const char *ip_str, uint16_t port, int timeout_ms)
     tv.tv_sec = timeout_ms / 1000;
     tv.tv_usec = (timeout_ms % 1000) * 1000;
 
-    // select(max_fd + 1, read_set, write_set, error_set, timeout)
-    // Listen to the write_set because a socket becomes 'writable' when connected
-    int res = select(sock + 1, NULL, &fdset, NULL, &tv);
+    int select_res = select(sock + 1, NULL, &fdset, NULL, &tv);
 
-    if (res < 0)
+    if (select_res > 0)
     {
-        ESP_LOGE(TAG, "Select error: errno %d", errno);
+        // Check for socket errors to confirm actual connection
+        int so_error;
+        socklen_t len = sizeof(so_error);
+        getsockopt(sock, SOL_SOCKET, SO_ERROR, &so_error, &len);
+
         close(sock);
-        return ESP_FAIL;
-    }
-    else if (res == 0)
-    {
-        ESP_LOGW(TAG, "Connection timed out after %d ms", timeout_ms);
-        close(sock);
-        return ESP_FAIL;
+        return (so_error == 0) ? ESP_OK : ESP_FAIL;
     }
     else
     {
-        // Even if select returns > 0, the connection might have failed (e.g. refused)
-        int sock_err = 0;
-        socklen_t len = sizeof(sock_err);
-        if (getsockopt(sock, SOL_SOCKET, SO_ERROR, &sock_err, &len) < 0)
-        {
-            ESP_LOGE(TAG, "getsockopt failed");
-            close(sock);
-            return ESP_FAIL;
-        }
-
-        if (sock_err != 0)
-        {
-            ESP_LOGW(TAG, "Connection failed after select: error %d", sock_err);
-            close(sock);
-            return ESP_FAIL;
-        }
-
-        ESP_LOGI(TAG, "Service is available!");
+        // Timeout or error
         close(sock);
-        return ESP_OK;
+        return ESP_FAIL;
     }
+}
+
+esp_err_t network_scan_services(void)
+{
+    ESP_LOGI(TAG, "Starting services scan...");
+    if (hosts_list == NULL || total_hosts_count == 0)
+        return ESP_ERR_INVALID_STATE;
+
+    // Stack depth 4096 is usually enough for socket ops + formatting
+    xTaskCreate(run_services_scan_task, "srv_scan_task", 4096, NULL, 5, NULL);
+
+    return ESP_OK;
 }
