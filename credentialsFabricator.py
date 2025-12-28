@@ -3,6 +3,7 @@ import json
 import csv
 from dotenv import load_dotenv
 from CredentialUtils import UserSession
+import getpass
 
 load_dotenv()
 
@@ -17,6 +18,7 @@ telegram_chat_id = os.getenv('TELEGRAM_CHAT_ID')
 
 totp_label = os.getenv('TOTP_LABEL')
 totp_issuer = os.getenv('TOTP_ISSUER')
+random_passwords = bool(os.getenv('SET_AUTO_RANDOM_PASSWORDS') in ['true', 'True'])
 user_sessions_data = json.loads(os.getenv('USER_SESSIONS'))
 
 static_ip_enabled = 0 # False by default
@@ -43,7 +45,7 @@ with open("secrets.csv", "w", newline="") as csvfile:
     writer.writerow({"key":"wifi_pass", "type":"data", "encoding":"string","value":wifi_password})
     
     if static_ip and gateway and mask:
-        static_ip_enabled = 1 # Switch to True
+        static_ip_enabled = 1 # 1 = True in the Esp32 code
         writer.writerow({"key":"static_ip", "type":"data", "encoding":"string","value":static_ip})
         writer.writerow({"key":"router_gw", "type":"data", "encoding":"string","value":gateway})
         writer.writerow({"key":"router_mask", "type":"data", "encoding":"string","value":mask})
@@ -51,6 +53,13 @@ with open("secrets.csv", "w", newline="") as csvfile:
     writer.writerow({"key":"use_static_ip", "type":"data", "encoding":"u8","value":static_ip_enabled})
     writer.writerow({"key":"bot_token", "type":"data", "encoding":"string","value":telegram_bot_token})
     writer.writerow({"key":"chat_id", "type":"data", "encoding":"string","value":telegram_chat_id})
+
+    if not random_passwords:
+        for i in range(len(user_sessions)):
+            session = user_sessions[i]
+            new_user_password = getpass.getpass(f"Enter password for user '{session.uname}': ")
+            hashed_password = session.generate_sha256_hash(new_user_password)
+            session.accessHash = hashed_password
 
     # Write the user sessions
     for i in range(len(user_sessions)):

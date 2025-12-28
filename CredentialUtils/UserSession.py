@@ -45,9 +45,9 @@ class UserSession:
 
     @staticmethod
     def get_random_pin_Code() -> str:
-        """Returns a random six digit code."""
-        chars = string.digits
-        pin =  ''.join(random.choice(chars) for _ in range(6))
+        """Returns a random eight character code."""
+        chars = string.digits + string.ascii_letters
+        pin =  ''.join(random.choice(chars) for _ in range(8))
         return pin
 
     @staticmethod
