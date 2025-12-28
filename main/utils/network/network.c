@@ -92,7 +92,7 @@ static void check_all_hosts_task(void *pvParameters)
         char final_report[600];
         snprintf(final_report, sizeof(final_report), "🌐 Online hosts 🌐\n[%s]", ping_summary_state.success_buffer);
 
-        post_message_to_queue(final_report, false);
+        post_message_to_queue(final_report, true);
 
         ESP_LOGI(TAG, "At least one host is online...");
     }
@@ -151,14 +151,8 @@ static void run_services_scan_task(void *pvParameters)
                 esp_err_t res = service_check(host->ip, port, 2000); // 2s timeout
 
                 char port_res[32];
-                if (res == ESP_OK)
-                {
-                    snprintf(port_res, sizeof(port_res), "%d ", port);
-                }
-                else
-                {
-                    port_res[0] = '\0'; // nothing added
-                }
+                snprintf(port_res, sizeof(port_res), "%d", port);
+                strcat(port_res, (res == ESP_OK) ? "⬆️ " : "⬇️ ");
 
                 // Safety check for buffer overflow
                 if (strlen(details) + strlen(port_res) < sizeof(details))
@@ -174,9 +168,7 @@ static void run_services_scan_task(void *pvParameters)
 
         if (total_services > 0)
         {
-            int percentage = (up_services * 100) / total_services;
-
-            snprintf(host_line, sizeof(host_line), "\n*%s*\n%s (%d%%)\n", host->alias, details, percentage);
+            snprintf(host_line, sizeof(host_line), "\n*%s*\n%s \n", host->alias, details);
 
             if (strlen(report_buffer) + strlen(host_line) < 1023)
             {
@@ -187,7 +179,7 @@ static void run_services_scan_task(void *pvParameters)
 
     ESP_LOGI(TAG, "Service scan complete. Sending message to queue...");
 
-    post_message_to_queue(report_buffer, false);
+    post_message_to_queue(report_buffer, true);
 
     free(report_buffer);
     vTaskDelete(NULL);
