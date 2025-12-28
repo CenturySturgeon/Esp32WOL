@@ -26,6 +26,25 @@ static uint8_t MAX_FAILED_LOGINS = 5;
 static uint8_t failed_login_count = 0;
 static SemaphoreHandle_t auth_mutex = NULL;
 
+static void stop_servers_task(void *arg)
+{
+    ESP_LOGW(TAG, "Stopping servers...");
+
+    if (https_server)
+    {
+        httpd_ssl_stop(https_server);
+        https_server = NULL;
+    }
+
+    if (http_server)
+    {
+        httpd_stop(http_server);
+        http_server = NULL;
+    }
+
+    vTaskDelete(NULL);
+}
+
 static void auth_register_failed_login(void)
 {
     xSemaphoreTake(auth_mutex, portMAX_DELAY);
@@ -38,11 +57,13 @@ static void auth_register_failed_login(void)
     {
         if (https_server)
         {
-            httpd_ssl_stop(https_server);
-            https_server = NULL;
-            char msg[128] = "🚨 Too Many Bad Login Attempts 🚨\nServer shutdown!";
+            // Stop the server
+            xTaskCreate(stop_servers_task, "stop_servers", 4096, NULL, 5, NULL);
+            led_utils_set_blinks(10); // Turn on the led indefinitely
+
+            char msg[128] = "🚨 Too Many Bad Login Attempts 🚨\n";
             post_message_to_queue(msg, false);
-            led_utils_set_blinks(1); // Turn on the led indefinitely
+
             ESP_LOGE(TAG, "Max failed logins reached. Stopping HTTPS server.");
         }
     }

@@ -225,8 +225,9 @@ esp_err_t post_login_handler(httpd_req_t *req)
     else
     {
         ESP_LOGW(TAG, "Login failed.");
-        // Return 401 or Redirect back to login
-        httpd_resp_send_err(req, HTTPD_401_UNAUTHORIZED, "Invalid Credentials");
+        httpd_resp_set_status(req, "303 See Other");
+        httpd_resp_set_hdr(req, "Location", "/login");
+        httpd_resp_send(req, NULL, 0);
     }
 
     return ESP_OK;
