@@ -30,6 +30,7 @@ static const char wol_html[] = R"HTML(
         overflow: hidden;
       }
       .container {
+        position: relative;
         background: #fff;
         padding: 20px;
         border-radius: 5px;
@@ -92,10 +93,28 @@ static const char wol_html[] = R"HTML(
       .paste-icon:hover {
         color: #333;
       }
+      /* Visit status page */
+      .top-right-icon {
+        position: absolute;
+        top: 15px;
+        right: 15px;
+        color: #333;
+        font-size: 1.2rem;
+        text-decoration: none;
+        transition: color 0.2s ease;
+      }
+
+      .top-right-icon:hover {
+        color: #007bff; /* changes color on hover */
+      }
+
     </style>
   </head>
   <body>
     <div class="container">
+      <a href="serviceCheck" class="top-right-icon" title="Go to status page">
+        <i class="fa-solid fa-arrow-right-to-bracket"></i>
+      </a>
       <h2>Turn On Device</h2>
       <form action="wol" method="POST">
         <div class="input-group">
