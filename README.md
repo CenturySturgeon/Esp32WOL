@@ -95,3 +95,34 @@ getroot() {
 
 # Use as 'getroot api.ipify.org my_cert.pem'
 ```
+
+```bash
+# Wifi & Network
+WIFI_NAME="WIFI_NAME_IN_UPPERCASE"
+WIFI_PASSWORD="WIFI_PASSWORD"
+
+# (Optional) Static Ip for the SOC
+STATIC_IP="192.168.1.1"
+# (Optional) If you don't know these, delete them along the static ip and the SOC will log them since it'll run in DHCP
+ROUTER_GATEWAY_IP="192.168.1.1"
+ROUTER_MASK="255.255.255.0"
+
+# Telegram bot token and your chat id
+TELEGRAM_BOT_TOKEN="XXXXXXXXXX:XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+TELEGRAM_CHAT_ID="XXXXXXXXXX"
+
+# TOTP
+# You can have multiple Esp32 the label helps differentiate them
+TOTP_LABEL="Place_Name"
+# TOTP displayed 'owner' or 'insititution' that issued the TOTP
+TOTP_ISSUER="Esp32"
+
+# Use randomly generated passwords or provide your own
+SET_AUTO_RANDOM_PASSWORDS=true
+
+# User Sessions (Optional, can be in sessions.json)
+USER_SESSIONS=[{"username": "amin", "timeout": 90}, {"username": "user1", "timeout": 60}, {"username": "user2", "timeout": 60}]
+
+# Hosts for Ping & Service Status (Optional, can be in watchlist.json)
+HOST_WATCHLIST=[{"alias":"Joe's PC","ip":"192.168.1.1","ports":[{"name":"Minecraft Server","port":443}]},{"alias":"Company Server","ip":"192.168.1.2","ports":[{"name":"http","port":80},{"name":"ssh","port":22}]},{"alias":"Coffee Machine","ip":"192.168.1.1"}]
+```

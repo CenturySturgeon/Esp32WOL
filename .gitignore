@@ -12,4 +12,6 @@ partitions.csv
 *.env
 *.venv
 *.bin
+watchlist.json
+sessions.json
 managed_components/

@@ -3,6 +3,7 @@ import json
 import csv
 from dotenv import load_dotenv
 from CredentialUtils import UserSession
+import json
 import getpass
 
 load_dotenv()
@@ -20,9 +21,19 @@ totp_label = os.getenv('TOTP_LABEL')
 totp_issuer = os.getenv('TOTP_ISSUER')
 
 random_passwords = bool(os.getenv('SET_AUTO_RANDOM_PASSWORDS') in ['true', 'True'])
-user_sessions_data = json.loads(os.getenv('USER_SESSIONS'))
 
-hosts = json.loads(os.getenv('HOST_WATCHLIST'))
+
+def get_json_content(file):
+    with open(file) as f:
+        content = json.load(f)
+    return content
+
+if os.path.isfile('./watchlist.json') and os.path.isfile('./sessions.json'):
+    hosts = get_json_content('./watchlist.json')
+    user_sessions_data = get_json_content('./sessions.json')
+else:
+    user_sessions_data = json.loads(os.getenv('USER_SESSIONS'))
+    hosts = json.loads(os.getenv('HOST_WATCHLIST'))
 
 static_ip_enabled = 0 # False by default
 user_sessions = [
