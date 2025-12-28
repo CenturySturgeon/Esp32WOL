@@ -415,7 +415,9 @@ esp_err_t post_ping_handler(httpd_req_t *req)
 
                 ESP_LOGI(TAG, "Success! Pinging hosts");
                 auth_logout_user(session_token);
-                // Ping hosts here
+
+                // Ping hosts and send telegram message
+                network_ping_all_hosts();
 
                 httpd_resp_set_status(req, "303 See Other");
                 httpd_resp_set_hdr(req, "Location", "/status?s=success");
