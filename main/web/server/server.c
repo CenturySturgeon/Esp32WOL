@@ -16,7 +16,29 @@ static uint8_t MAX_HTTP_SOCKETS = 5;
 static uint8_t MAX_HTTPS_SOCKETS = 7;
 static uint8_t TCP_HANDSHAKE_LINGER_TIMEOUT = 90; // Keep connections alive for less time to free resources faster
 static bool LRU_PURGE = true;                     // Purge connections with LRU algo
-static uint8_t MAX_URI_HANDLERS = 12;             // Modify this if you need more handlers
+
+// HTTP handlers
+static const httpd_uri_t *http_uri_handlers[] = {
+    &http_root,
+};
+
+// HTTPS handlers
+static const httpd_uri_t *https_uri_handlers[] = {
+    &root,
+    &ip,
+    &copyIp,
+    &login_get,
+    &status_get,
+    &serviceCheck_get,
+    &wol_get,
+    &login_post,
+    &ping_post,
+    &serviceCheck_post,
+    &wol_post,
+};
+
+static const size_t HTTP_URI_COUNT = sizeof(http_uri_handlers) / sizeof(http_uri_handlers[0]);
+static const size_t HTTPS_URI_COUNT = sizeof(https_uri_handlers) / sizeof(https_uri_handlers[0]);
 
 static const char *TAG = "SERVER";
 
@@ -31,14 +53,25 @@ httpd_handle_t start_http_redirect_server(void)
     config.lru_purge_enable = LRU_PURGE;
     config.max_open_sockets = MAX_HTTP_SOCKETS;
 
-    httpd_handle_t server = NULL;
+    httpd_handle_t http_server = NULL;
 
-    if (httpd_start(&server, &config) == ESP_OK)
+    if (httpd_start(&http_server, &config) == ESP_OK)
     {
         ESP_LOGI(TAG, "HTTP redirect server started on port %d", config.server_port);
 
-        httpd_register_uri_handler(server, &http_root);
-        return server;
+        for (size_t i = 0; i < HTTP_URI_COUNT; i++)
+        {
+            esp_err_t err = httpd_register_uri_handler(http_server, http_uri_handlers[i]);
+            if (err != ESP_OK)
+            {
+                ESP_LOGE(TAG,
+                         "Failed to register URI: %s (%s)",
+                         http_uri_handlers[i]->uri,
+                         esp_err_to_name(err));
+            }
+        }
+
+        return http_server;
     }
 
     ESP_LOGE(TAG, "Error starting HTTP redirect server!");
@@ -58,56 +91,22 @@ httpd_handle_t start_https_server(void)
     conf.httpd.max_open_sockets = MAX_HTTPS_SOCKETS;
     conf.httpd.lru_purge_enable = LRU_PURGE;
     conf.httpd.linger_timeout = TCP_HANDSHAKE_LINGER_TIMEOUT;
-    conf.httpd.max_uri_handlers = MAX_URI_HANDLERS;
+    conf.httpd.max_uri_handlers = HTTP_URI_COUNT + HTTPS_URI_COUNT;
 
     if (httpd_ssl_start(&https_server, &conf) == ESP_OK)
     {
         ESP_LOGI(TAG, "HTTPS server started on port %d", conf.port_secure);
 
-        if (httpd_register_uri_handler(https_server, &root) != ESP_OK)
+        for (size_t i = 0; i < HTTPS_URI_COUNT; i++)
         {
-            ESP_LOGE(TAG, "Failed to register route! Check MAX_URI_HANDLERS");
-        }
-        if (httpd_register_uri_handler(https_server, &ip) != ESP_OK)
-        {
-            ESP_LOGE(TAG, "Failed to register route! Check MAX_URI_HANDLERS");
-        }
-        if (httpd_register_uri_handler(https_server, &copyIp) != ESP_OK)
-        {
-            ESP_LOGE(TAG, "Failed to register route! Check MAX_URI_HANDLERS");
-        }
-        if (httpd_register_uri_handler(https_server, &login_get) != ESP_OK)
-        {
-            ESP_LOGE(TAG, "Failed to register route! Check MAX_URI_HANDLERS");
-        }
-        if (httpd_register_uri_handler(https_server, &status_get) != ESP_OK)
-        {
-            ESP_LOGE(TAG, "Failed to register route! Check MAX_URI_HANDLERS");
-        }
-        if (httpd_register_uri_handler(https_server, &serviceCheck_get) != ESP_OK)
-        {
-            ESP_LOGE(TAG, "Failed to register route! Check MAX_URI_HANDLERS");
-        }
-        if (httpd_register_uri_handler(https_server, &wol_get) != ESP_OK)
-        {
-            ESP_LOGE(TAG, "Failed to register route! Check MAX_URI_HANDLERS");
-        }
-
-        if (httpd_register_uri_handler(https_server, &login_post) != ESP_OK)
-        {
-            ESP_LOGE(TAG, "Failed to register route! Check MAX_URI_HANDLERS");
-        }
-        if (httpd_register_uri_handler(https_server, &ping_post) != ESP_OK)
-        {
-            ESP_LOGE(TAG, "Failed to register route! Check MAX_URI_HANDLERS");
-        }
-        if (httpd_register_uri_handler(https_server, &serviceCheck_post) != ESP_OK)
-        {
-            ESP_LOGE(TAG, "Failed to register route! Check MAX_URI_HANDLERS");
-        }
-        if (httpd_register_uri_handler(https_server, &wol_post) != ESP_OK)
-        {
-            ESP_LOGE(TAG, "Failed to register route! Check MAX_URI_HANDLERS");
+            esp_err_t err = httpd_register_uri_handler(https_server, https_uri_handlers[i]);
+            if (err != ESP_OK)
+            {
+                ESP_LOGE(TAG,
+                         "Failed to register URI: %s (%s)",
+                         https_uri_handlers[i]->uri,
+                         esp_err_to_name(err));
+            }
         }
 
         return https_server;
