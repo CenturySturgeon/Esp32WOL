@@ -61,7 +61,7 @@ static void auth_register_failed_login(void)
             xTaskCreate(stop_servers_task, "stop_servers", 4096, NULL, 5, NULL);
             led_utils_set_blinks(10); // Turn on the led indefinitely
 
-            char msg[128] = "🚨 Too Many Bad Login Attempts 🚨\n";
+            char msg[128] = "🚨 **Server shutdown** 🚨";
             post_message_to_queue(msg, false);
 
             ESP_LOGE(TAG, "Max failed logins reached. Stopping HTTPS server.");

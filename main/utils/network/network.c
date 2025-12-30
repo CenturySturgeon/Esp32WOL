@@ -90,7 +90,7 @@ static void check_all_hosts_task(void *pvParameters)
         ping_summary_state.success_buffer[strlen(ping_summary_state.success_buffer) - 2] = '\0';
 
         char final_report[600];
-        snprintf(final_report, sizeof(final_report), "🌐 Online hosts 🌐\n[%s]", ping_summary_state.success_buffer);
+        snprintf(final_report, sizeof(final_report), "🌐 **Online hosts** 🌐\n%s", ping_summary_state.success_buffer);
 
         post_message_to_queue(final_report, true);
 
@@ -98,7 +98,7 @@ static void check_all_hosts_task(void *pvParameters)
     }
     else
     {
-        post_message_to_queue("🖥️❌\nAll hosts unreachable", false);
+        post_message_to_queue("🖥️❌\n**All hosts unreachable**", false);
         ESP_LOGW(TAG, "Network Status: All hosts unreachable.");
     }
 
