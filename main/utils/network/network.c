@@ -160,8 +160,8 @@ static void run_services_scan_task(void *pvParameters)
 
         while (port_token != NULL && name_token != NULL)
         {
-            ESP_LOGI(TAG, "  Token pair: port='%s' name='%s'",
-                     port_token, name_token);
+            // ESP_LOGI(TAG, "  Token pair: ='%s' name='%s'",
+            //          port_token, name_token);
 
             int port = atoi(port_token);
             if (port > 0)
