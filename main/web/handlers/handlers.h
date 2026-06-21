@@ -22,4 +22,8 @@ esp_err_t post_ping_handler(httpd_req_t *req);
 esp_err_t post_serviceCheck_handler(httpd_req_t *req);
 esp_err_t post_wol_handler(httpd_req_t *req);
 
+// Admin endpoints
+esp_err_t get_cert_status_handler(httpd_req_t *req);
+esp_err_t post_update_certs_handler(httpd_req_t *req);
+
 #endif // HANDLERS_H

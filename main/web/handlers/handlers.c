@@ -1,14 +1,19 @@
 #include <sys/param.h>
+#include <time.h>
 
 #include "esp_http_server.h"
 #include "esp_https_server.h"
 #include "esp_log.h"
+#include "cJSON.h"
+#include "mbedtls/base64.h"
 
 #include "handlers.h"
 #include "../../auth/auth.h"
 #include "../../utils/network/network.h"
 #include "../routes/routes.h"
 #include "../../utils/utils.h"
+#include "../../utils/nvs/nvs_utils.h"
+#include "../../web/server/server.h"
 
 #include "../views/copyIp.h"
 #include "../views/login.h"
@@ -16,9 +21,52 @@
 #include "../views/status.h"
 #include "../views/wol.h"
 
+extern const unsigned char server_crt_start[] asm("_binary_server_der_start");
+extern const unsigned char server_crt_end[] asm("_binary_server_der_end");
+extern const unsigned char server_key_start[] asm("_binary_server_key_der_start");
+extern const unsigned char server_key_end[] asm("_binary_server_key_der_end");
+
 extern char public_ip[64]; // Telling the compiler "trust me this exists somewhere (wifi.c)"
 
 static const char *TAG = "ROUTE";
+
+// Rate limiting for admin endpoints
+#define MAX_CERT_UPDATE_ATTEMPTS 3
+#define RATE_LIMIT_WINDOW_MS 6000000 // 1 hour
+
+typedef struct
+{
+    int64_t timestamps[MAX_CERT_UPDATE_ATTEMPTS];
+    int count;
+} rate_limit_state_t;
+
+static rate_limit_state_t cert_update_rate_limit = {0};
+
+static bool is_rate_limited(void)
+{
+    int64_t now_ms = esp_timer_get_time() / 1000; // Convert to milliseconds
+
+    // Remove old timestamps outside the window
+    int valid_count = 0;
+    for (int i = 0; i < cert_update_rate_limit.count; i++)
+    {
+        if (now_ms - cert_update_rate_limit.timestamps[i] < RATE_LIMIT_WINDOW_MS)
+        {
+            cert_update_rate_limit.timestamps[valid_count++] = cert_update_rate_limit.timestamps[i];
+        }
+    }
+    cert_update_rate_limit.count = valid_count;
+
+    // Check if rate limited
+    if (valid_count >= MAX_CERT_UPDATE_ATTEMPTS)
+    {
+        return true;
+    }
+
+    // Add new timestamp
+    cert_update_rate_limit.timestamps[cert_update_rate_limit.count++] = now_ms;
+    return false;
+}
 
 static esp_err_t _get_cookie_value(httpd_req_t *req, const char *cookie_name, char *val, size_t val_size)
 {
@@ -502,5 +550,273 @@ esp_err_t post_serviceCheck_handler(httpd_req_t *req)
     httpd_resp_set_status(req, "303 See Other");
     httpd_resp_set_hdr(req, "Location", "/status?s=error");
     httpd_resp_send(req, NULL, 0);
+    return ESP_OK;
+}
+
+// Admin Endpoints
+esp_err_t get_cert_status_handler(httpd_req_t *req)
+{
+    ESP_LOGI(TAG, "GET /admin/cert-status");
+
+    // Load certificates to check expiry
+    uint8_t *cert_buf = NULL;
+    size_t cert_len = 0;
+    uint8_t *key_buf = NULL;
+    size_t key_len = 0;
+
+    esp_err_t err = load_certs_from_nvs(&cert_buf, &cert_len, &key_buf, &key_len);
+    if (err != ESP_OK)
+    {
+        httpd_resp_set_status(req, "500 Internal Server Error");
+        httpd_resp_send(req, "{\"error\": \"Failed to load certificates\"}", HTTPD_RESP_USE_STRLEN);
+        return ESP_FAIL;
+    }
+
+    time_t expiry = get_certificate_expiry_time(cert_buf, cert_len);
+    time_t now = time(NULL);
+    int days_remaining = (expiry - now) / (24 * 60 * 60);
+
+    // Format expiry date
+    char expiry_str[20];
+    struct tm *tm_info = gmtime(&expiry);
+    strftime(expiry_str, sizeof(expiry_str), "%Y-%m-%d", tm_info);
+
+    const char *source = nvs_has_nvs_certs() ? "nvs" : "embedded";
+
+    // Create JSON response
+    cJSON *json = cJSON_CreateObject();
+    if (!json)
+    {
+        httpd_resp_set_status(req, "500 Internal Server Error");
+        httpd_resp_send(req, "{\"error\": \"JSON creation failed\"}", HTTPD_RESP_USE_STRLEN);
+        return ESP_FAIL;
+    }
+
+    cJSON_AddStringToObject(json, "expiry", expiry_str);
+    cJSON_AddNumberToObject(json, "days_remaining", days_remaining);
+    cJSON_AddStringToObject(json, "source", source);
+
+    char *json_str = cJSON_PrintUnformatted(json);
+    cJSON_Delete(json);
+
+    if (!json_str)
+    {
+        httpd_resp_set_status(req, "500 Internal Server Error");
+        httpd_resp_send(req, "{\"error\": \"JSON serialization failed\"}", HTTPD_RESP_USE_STRLEN);
+        return ESP_FAIL;
+    }
+
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_send(req, json_str, HTTPD_RESP_USE_STRLEN);
+    free(json_str);
+
+    // Don't free embedded certs
+    if (cert_buf != (uint8_t *)server_crt_start)
+    {
+        free(cert_buf);
+    }
+    if (key_buf != (uint8_t *)server_key_start)
+    {
+        free(key_buf);
+    }
+
+    return ESP_OK;
+}
+
+esp_err_t post_update_certs_handler(httpd_req_t *req)
+{
+    ESP_LOGI(TAG, "POST /admin/update-certs");
+
+    // Check rate limiting first
+    if (is_rate_limited())
+    {
+        httpd_resp_set_status(req, "429 Too Many Requests");
+        httpd_resp_send(req, "{\"error\": \"Rate limit exceeded. Max 3 attempts per minute.\"}", HTTPD_RESP_USE_STRLEN);
+        return ESP_OK;
+    }
+
+    // Check X-Cert-Key header
+    size_t key_hdr_len = httpd_req_get_hdr_value_len(req, "X-Cert-Key");
+    if (key_hdr_len == 0 || key_hdr_len >= 128)
+    {
+        httpd_resp_set_status(req, "401 Unauthorized");
+        httpd_resp_send(req, "{\"error\": \"Missing or invalid X-Cert-Key header\"}", HTTPD_RESP_USE_STRLEN);
+        return ESP_OK;
+    }
+
+    char *cert_key = malloc(key_hdr_len + 1);
+    if (!cert_key)
+    {
+        httpd_resp_set_status(req, "500 Internal Server Error");
+        httpd_resp_send(req, "{\"error\": \"Memory allocation failed\"}", HTTPD_RESP_USE_STRLEN);
+        return ESP_FAIL;
+    }
+
+    if (httpd_req_get_hdr_value_str(req, "X-Cert-Key", cert_key, key_hdr_len + 1) != ESP_OK)
+    {
+        free(cert_key);
+        httpd_resp_set_status(req, "401 Unauthorized");
+        httpd_resp_send(req, "{\"error\": \"Failed to read X-Cert-Key header\"}", HTTPD_RESP_USE_STRLEN);
+        return ESP_OK;
+    }
+    cert_key[key_hdr_len] = '\0';
+
+    // Get stored cert update key from NVS
+    char stored_key[128] = {0};
+    esp_err_t err = nvs_get_cert_update_key(stored_key, sizeof(stored_key));
+    if (err != ESP_OK || strcmp(cert_key, stored_key) != 0)
+    {
+        free(cert_key);
+        httpd_resp_set_status(req, "401 Unauthorized");
+        httpd_resp_send(req, "{\"error\": \"Invalid certificate update key\"}", HTTPD_RESP_USE_STRLEN);
+        return ESP_OK;
+    }
+
+    free(cert_key);
+
+    // Parse JSON payload
+    const size_t MAX_JSON_SIZE = 4096;
+    char *json_buf = malloc(MAX_JSON_SIZE);
+    if (!json_buf)
+    {
+        httpd_resp_set_status(req, "500 Internal Server Error");
+        httpd_resp_send(req, "{\"error\": \"Memory allocation failed\"}", HTTPD_RESP_USE_STRLEN);
+        return ESP_FAIL;
+    }
+
+    int total_len = req->content_len;
+    if (total_len <= 0 || total_len >= MAX_JSON_SIZE)
+    {
+        free(json_buf);
+        httpd_resp_set_status(req, "400 Bad Request");
+        httpd_resp_send(req, "{\"error\": \"Invalid content length\"}", HTTPD_RESP_USE_STRLEN);
+        return ESP_FAIL;
+    }
+
+    int received = httpd_req_recv(req, json_buf, total_len);
+    if (received <= 0)
+    {
+        free(json_buf);
+        return ESP_FAIL;
+    }
+    json_buf[received] = '\0';
+
+    // Parse JSON
+    cJSON *json = cJSON_Parse(json_buf);
+    free(json_buf);
+
+    if (!json)
+    {
+        httpd_resp_set_status(req, "400 Bad Request");
+        httpd_resp_send(req, "{\"error\": \"Invalid JSON payload\"}", HTTPD_RESP_USE_STRLEN);
+        return ESP_OK;
+    }
+
+    // Extract base64 encoded cert and key
+    cJSON *cert_b64 = cJSON_GetObjectItem(json, "certificate");
+    cJSON *key_b64 = cJSON_GetObjectItem(json, "private_key");
+
+    if (!cJSON_IsString(cert_b64) || !cJSON_IsString(key_b64))
+    {
+        cJSON_Delete(json);
+        httpd_resp_set_status(req, "400 Bad Request");
+        httpd_resp_send(req, "{\"error\": \"Missing certificate or private_key fields\"}", HTTPD_RESP_USE_STRLEN);
+        return ESP_OK;
+    }
+
+    // Decode base64
+    size_t cert_decoded_len = 0;
+    uint8_t *cert_der = NULL;
+    int ret = mbedtls_base64_decode(NULL, 0, &cert_decoded_len, (const unsigned char *)cert_b64->valuestring, strlen(cert_b64->valuestring));
+    if (ret != MBEDTLS_ERR_BASE64_BUFFER_TOO_SMALL && ret != 0)
+    {
+        cJSON_Delete(json);
+        httpd_resp_set_status(req, "400 Bad Request");
+        httpd_resp_send(req, "{\"error\": \"Invalid certificate base64 encoding\"}", HTTPD_RESP_USE_STRLEN);
+        return ESP_OK;
+    }
+
+    cert_der = malloc(cert_decoded_len);
+    if (!cert_der)
+    {
+        cJSON_Delete(json);
+        httpd_resp_set_status(req, "500 Internal Server Error");
+        httpd_resp_send(req, "{\"error\": \"Memory allocation failed\"}", HTTPD_RESP_USE_STRLEN);
+        return ESP_FAIL;
+    }
+
+    ret = mbedtls_base64_decode(cert_der, cert_decoded_len, &cert_decoded_len, (const unsigned char *)cert_b64->valuestring, strlen(cert_b64->valuestring));
+    if (ret != 0)
+    {
+        free(cert_der);
+        cJSON_Delete(json);
+        httpd_resp_set_status(req, "400 Bad Request");
+        httpd_resp_send(req, "{\"error\": \"Certificate base64 decoding failed\"}", HTTPD_RESP_USE_STRLEN);
+        return ESP_OK;
+    }
+
+    size_t key_decoded_len = 0;
+    uint8_t *key_der = NULL;
+    ret = mbedtls_base64_decode(NULL, 0, &key_decoded_len, (const unsigned char *)key_b64->valuestring, strlen(key_b64->valuestring));
+    if (ret != MBEDTLS_ERR_BASE64_BUFFER_TOO_SMALL && ret != 0)
+    {
+        free(cert_der);
+        cJSON_Delete(json);
+        httpd_resp_set_status(req, "400 Bad Request");
+        httpd_resp_send(req, "{\"error\": \"Invalid key base64 encoding\"}", HTTPD_RESP_USE_STRLEN);
+        return ESP_OK;
+    }
+
+    key_der = malloc(key_decoded_len);
+    if (!key_der)
+    {
+        free(cert_der);
+        cJSON_Delete(json);
+        httpd_resp_set_status(req, "500 Internal Server Error");
+        httpd_resp_send(req, "{\"error\": \"Memory allocation failed\"}", HTTPD_RESP_USE_STRLEN);
+        return ESP_FAIL;
+    }
+
+    ret = mbedtls_base64_decode(key_der, key_decoded_len, &key_decoded_len, (const unsigned char *)key_b64->valuestring, strlen(key_b64->valuestring));
+    if (ret != 0)
+    {
+        free(cert_der);
+        free(key_der);
+        cJSON_Delete(json);
+        httpd_resp_set_status(req, "400 Bad Request");
+        httpd_resp_send(req, "{\"error\": \"Private key base64 decoding failed\"}", HTTPD_RESP_USE_STRLEN);
+        return ESP_OK;
+    }
+
+    cJSON_Delete(json);
+
+    // Save to NVS
+    err = nvs_save_certs(cert_der, cert_decoded_len, key_der, key_decoded_len);
+    if (err != ESP_OK)
+    {
+        free(cert_der);
+        free(key_der);
+        httpd_resp_set_status(req, "500 Internal Server Error");
+        httpd_resp_send(req, "{\"error\": \"Failed to save certificates to NVS\"}", HTTPD_RESP_USE_STRLEN);
+        return ESP_FAIL;
+    }
+
+    free(cert_der);
+    free(key_der);
+
+    // Reload HTTPS server with new certificates
+    err = reload_https_server();
+    if (err != ESP_OK)
+    {
+        httpd_resp_set_status(req, "503 Service Unavailable");
+        httpd_resp_send(req, "{\"error\": \"Failed to reload HTTPS server\"}", HTTPD_RESP_USE_STRLEN);
+        return ESP_FAIL;
+    }
+
+    // Send success response
+    httpd_resp_set_status(req, "200 OK");
+    httpd_resp_send(req, "{\"message\": \"Certificates updated successfully\"}", HTTPD_RESP_USE_STRLEN);
+
+    ESP_LOGI(TAG, "Certificates updated and server reloaded successfully");
     return ESP_OK;
 }

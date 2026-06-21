@@ -21,6 +21,10 @@ extern httpd_uri_t copyIp;
 extern httpd_uri_t login_get;
 extern httpd_uri_t status_get;
 
+// Admin endpoints (no session auth required, uses API key)
+extern httpd_uri_t cert_status_get;
+extern httpd_uri_t update_certs_post;
+
 // Protected routes
 extern httpd_uri_t wol_get;
 extern httpd_uri_t serviceCheck_get;

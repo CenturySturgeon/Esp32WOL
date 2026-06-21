@@ -32,4 +32,6 @@ esp_err_t auth_check_session(const char *token);
 esp_err_t auth_check_totp_request(const char *token, const uint32_t pin);
 esp_err_t auth_semaphore_init();
 
+extern SemaphoreHandle_t auth_mutex;
+
 #endif // AUTH_H

@@ -1,3 +1,4 @@
+#include "esp_https_server.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "mbedtls/sha256.h"
@@ -24,7 +25,7 @@ static uint16_t auth_lock_status = AUTH_UNLOCKED_MAGIC;
 
 static uint8_t MAX_FAILED_LOGINS = 5;
 static uint8_t failed_login_count = 0;
-static SemaphoreHandle_t auth_mutex = NULL;
+SemaphoreHandle_t auth_mutex = NULL;
 
 static void stop_servers_task(void *arg)
 {

@@ -45,6 +45,19 @@ httpd_uri_t status_get = {
     .handler = get_status_handler,
     .user_ctx = NULL};
 
+// Admin endpoints (no session auth required, uses API key)
+httpd_uri_t cert_status_get = {
+    .uri = "/admin/cert-status",
+    .method = HTTP_GET,
+    .handler = get_cert_status_handler,
+    .user_ctx = NULL};
+
+httpd_uri_t update_certs_post = {
+    .uri = "/admin/update-certs",
+    .method = HTTP_POST,
+    .handler = post_update_certs_handler,
+    .user_ctx = NULL};
+
 // Protected route handlers
 httpd_uri_t wol_get = {
     .uri = "/wol",
