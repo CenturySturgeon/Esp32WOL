@@ -32,9 +32,7 @@ esp_err_t send_telegram_message_sync(const char *message, bool silent)
     // Ensure JSON safety (basic check, ideally use a JSON library or escape quotes)
     snprintf(post_data, sizeof(post_data),
              "{\"chat_id\":\"%s\",\"text\":\"%s\",\"disable_notification\":%s,\"parse_mode\":\"Markdown\"}",
-             chat_id,
-             message,
-             silent ? "true" : "false");
+             chat_id, message, silent ? "true" : "false");
 
     esp_http_client_config_t config = {
         .url = url,
