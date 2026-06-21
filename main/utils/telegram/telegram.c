@@ -13,6 +13,19 @@ extern const char telegram_pem_end[] asm("_binary_telegram_pem_end");
 
 static const char *TAG = "TELEGRAM";
 
+bool is_telegram_configured(void)
+{
+    char token[64] = {0};
+    char chat_id[20] = {0};
+    if (nvs_get_telegram_secrets(token, sizeof(token), chat_id, sizeof(chat_id)) != ESP_OK)
+    {
+        return false;
+    }
+
+    // Check both are non-empty
+    return (strlen(token) > 0 && strlen(chat_id) > 0);
+}
+
 // Internal synchronous sender (The original function, made static)
 esp_err_t send_telegram_message_sync(const char *message, bool silent)
 {

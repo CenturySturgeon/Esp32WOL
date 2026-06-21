@@ -60,14 +60,31 @@ static bool check_public_ip(char *buffer, size_t buffer_len)
             {
                 ESP_LOGI(TAG, "Initial Public IP acquired: %s", public_ip);
                 send_ip_notification("Esp32 online 🚀", public_ip); // Replaces hardcoded URL
-                duckdns_update_with_retry(public_ip);
+
+                if (is_duckdns_configured())
+                {
+                    duckdns_update_with_retry(public_ip);
+                }
+                else
+                {
+                    ESP_LOGI(TAG, "DuckDNS not configured. Skipping update.");
+                }
+
                 led_utils_set_blinks(0);
                 initial_boot_done = true;
             }
             else
             {
                 send_ip_notification("Public IP change to:", public_ip); // Replaces hardcoded URL
-                duckdns_update_with_retry(public_ip);
+
+                if (is_duckdns_configured())
+                {
+                    duckdns_update_with_retry(public_ip);
+                }
+                else
+                {
+                    ESP_LOGI(TAG, "DuckDNS not configured. Skipping update.");
+                }
             }
         }
         else

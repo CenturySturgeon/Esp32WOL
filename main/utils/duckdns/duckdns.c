@@ -13,6 +13,21 @@ static const char *TAG = "DUCKDNS";
 
 #define DUCKDNS_RETRY_START_MS 5000
 #define DUCKDNS_RETRY_MAX_MS 60000
+#define DUCKDNS_MAX_RETRIES 7
+
+bool is_duckdns_configured(void)
+{
+    char token[64] = {0};
+    char domain[64] = {0};
+
+    if (nvs_get_duckdns_secrets(token, sizeof(token), domain, sizeof(domain)) != ESP_OK)
+    {
+        return false;
+    }
+
+    // Check both are non-empty
+    return (strlen(token) > 0 && strlen(domain) > 0);
+}
 
 esp_err_t duckdns_update_sync(const char *ip)
 {
@@ -73,17 +88,23 @@ esp_err_t duckdns_update_sync(const char *ip)
 esp_err_t duckdns_update_with_retry(const char *ip)
 {
     uint32_t delay_ms = DUCKDNS_RETRY_START_MS;
+    int retries = 0;
 
-    while (1)
+    while (retries < DUCKDNS_MAX_RETRIES)
     {
         if (duckdns_update_sync(ip) == ESP_OK)
             return ESP_OK;
 
-        ESP_LOGW(TAG, "Retrying DuckDNS in %lu ms...", delay_ms);
+        ESP_LOGW(TAG, "DuckDNS update failed. Retry %d/%d in %lu ms...", retries + 1, DUCKDNS_MAX_RETRIES, delay_ms);
         vTaskDelay(pdMS_TO_TICKS(delay_ms));
 
         delay_ms *= 2;
         if (delay_ms > DUCKDNS_RETRY_MAX_MS)
             delay_ms = DUCKDNS_RETRY_MAX_MS;
+
+        retries++;
     }
+
+    ESP_LOGE(TAG, "DuckDNS update failed after %d retries. Giving up.", DUCKDNS_MAX_RETRIES);
+    return ESP_FAIL;
 }

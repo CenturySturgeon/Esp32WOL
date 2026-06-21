@@ -49,6 +49,12 @@ user_sessions = [
     for session in user_sessions_data
 ]
 
+# Check if optional services are fully configured (both parts required)
+telegram_configured = (telegram_bot_token and len(telegram_bot_token.strip()) > 0 and
+                       telegram_chat_id and len(telegram_chat_id.strip()) > 0)
+duckdns_configured = (duck_dns_token and len(duck_dns_token.strip()) > 0 and
+                      duck_dns_domain and len(duck_dns_domain.strip()) > 0)
+
 # Write CSV
 with open("secrets.csv", "w", newline="") as csvfile:
     fieldnames = ["key", "type", "encoding", "value"]
@@ -69,10 +75,19 @@ with open("secrets.csv", "w", newline="") as csvfile:
         writer.writerow({"key":"router_mask", "type":"data", "encoding":"string","value":mask})
 
     writer.writerow({"key":"use_static_ip", "type":"data", "encoding":"u8","value":static_ip_enabled})
-    writer.writerow({"key":"bot_token", "type":"data", "encoding":"string","value":telegram_bot_token})
-    writer.writerow({"key":"chat_id", "type":"data", "encoding":"string","value":telegram_chat_id})
-    writer.writerow({"key":"duckdns_token", "type":"data", "encoding":"string","value":duck_dns_token})
-    writer.writerow({"key":"duckdns_domain", "type":"data", "encoding":"string","value":duck_dns_domain})
+
+    # Only write Telegram credentials if BOTH bot_token AND chat_id are provided
+    if telegram_configured:
+        writer.writerow({"key":"bot_token", "type":"data", "encoding":"string","value":telegram_bot_token})
+        writer.writerow({"key":"chat_id", "type":"data", "encoding":"string","value":telegram_chat_id})
+    else:
+        print("Warning: Telegram not fully configured (need both TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID). Notifications will be disabled.")
+    # Only write DuckDNS credentials if BOTH token AND domain are provided
+    if duckdns_configured:
+        writer.writerow({"key":"duckdns_token", "type":"data", "encoding":"string","value":duck_dns_token})
+        writer.writerow({"key":"duckdns_domain", "type":"data", "encoding":"string","value":duck_dns_domain})
+    else:
+        print("Warning: DuckDNS not fully configured (need both DUCK_DNS_TOKEN and DUCK_DNS_DOMAIN). Updates will be skipped.")
     writer.writerow({"key":"custom_port", "type":"data", "encoding":"string", "value":custom_port })
 
     if not random_passwords:

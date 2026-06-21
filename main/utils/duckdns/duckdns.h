@@ -6,5 +6,6 @@
 
 esp_err_t duckdns_update_sync(const char *ip);
 esp_err_t duckdns_update_with_retry(const char *ip);
+bool is_duckdns_configured(void);
 
 #endif
