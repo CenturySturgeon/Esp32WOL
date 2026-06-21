@@ -8,10 +8,12 @@ certs/
 *.crt
 *.key
 secrets.csv
+og_secrets.csv
 partitions.csv
 *.env
 *.venv
 *.bin
+*.der
 watchlist.json
 sessions.json
 managed_components/
