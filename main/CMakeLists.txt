@@ -16,10 +16,15 @@ idf_component_register(
          "wifi/public_ip/public_ip.c"
          "wifi/wifi.c"
     INCLUDE_DIRS "."
-    REQUIRES esp_https_server nvs_flash esp_netif esp_wifi esp_http_client mdns esp_driver_gpio esp_timer
+    REQUIRES esp_https_server nvs_flash esp_netif esp_wifi esp_http_client mdns esp_driver_gpio esp_timer cjson
     EMBED_FILES
+        # Root CA certificates for outbound HTTPS clients (ipify, DuckDNS, Telegram)
         "web/certs/api_ipify.pem"
+        "web/certs/duckdns.pem"
+        "web/certs/telegram.pem"
+        # NOTE: server.der and server_key.der are kept temporarily as a fallback safety net during rollout.
+        # Dynamic cert loading uses NVS (requires >= 0x10000 partition size in partitions.csv).
+        # Once NVS fallback is thoroughly tested, these can be removed to save flash space.
         "web/certs/server.der"
         "web/certs/server_key.der"
-        "web/certs/telegram.pem"
 )
