@@ -12,6 +12,8 @@
 #include "../../utils/ipify/ipify.h"
 #include "../../utils/led/led_utils.h"
 #include "../../utils/telegram/queue.h"
+#include "../../utils/duckdns/duckdns.h"
+#include "../../utils/nvs/nvs_utils.h"
 
 static const char *TAG = "PUBLIC_IP";
 
@@ -25,31 +27,47 @@ TaskHandle_t public_ip_task_handle = NULL;
 static const uint32_t IP_CHECK_INTERVAL_MS = 20 * 60 * 1000; // 20 Mins
 static const uint32_t IP_RETRY_DELAY_MS = 10 * 1000;         // 10 Secs (Fast retry on fail)
 
+static void send_ip_notification(const char *message_prefix, const char *ip)
+{
+    int port = nvs_get_custom_port();
+    char url_buf[128];
+
+    // Omit port if standard HTTPS (443), otherwise include it
+    if (port == 443)
+    {
+        snprintf(url_buf, sizeof(url_buf), "https://%s", ip);
+    }
+    else
+    {
+        snprintf(url_buf, sizeof(url_buf), "https://%s:%d", ip, port);
+    }
+
+    post_message_to_queue("%s\n%s", true, message_prefix, url_buf);
+}
+
 static bool check_public_ip(char *buffer, size_t buffer_len)
 {
-    // Try to get IP
     if (get_public_ip(buffer, buffer_len) == ESP_OK)
     {
-        // Compare new IP with stored IP
         if (strcmp(public_ip, buffer) != 0)
         {
             ESP_LOGW(TAG, "Public IP changed from %s to %s", public_ip, buffer);
 
-            // Update global variable safely
             memset(public_ip, 0, sizeof(public_ip));
             strncpy(public_ip, buffer, sizeof(public_ip) - 1);
 
-            // First time success logic
             if (!initial_boot_done)
             {
                 ESP_LOGI(TAG, "Initial Public IP acquired: %s", public_ip);
-                post_message_to_queue("Esp32 online 🚀\nhttps://%s", true, public_ip);
+                send_ip_notification("Esp32 online 🚀", public_ip); // Replaces hardcoded URL
+                duckdns_update_with_retry(public_ip);
                 led_utils_set_blinks(0);
                 initial_boot_done = true;
             }
             else
             {
-                post_message_to_queue("Public IP change to:\nhttps://%s", true, public_ip);
+                send_ip_notification("Public IP change to:", public_ip); // Replaces hardcoded URL
+                duckdns_update_with_retry(public_ip);
             }
         }
         else

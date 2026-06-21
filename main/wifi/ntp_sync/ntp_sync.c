@@ -91,6 +91,8 @@ void ntp_management_task(void *pvParameters)
                 ESP_LOGE(TAG, "Failed to start HTTPS server!");
             }
 
+            check_certificate_expiry();
+
             // Start Public IP Manager
             // Since get_public_ip uses HTTPS, it needs valid Time.
             xTaskCreate(public_ip_management_task, "ip_mgr", 8192, NULL, 5, NULL);
@@ -130,19 +132,25 @@ void ntp_management_task(void *pvParameters)
             sntp_restart();
             vTaskDelay(pdMS_TO_TICKS(10000));
 
-            time_t now;
-            struct tm timeinfo;
-            time(&now);
-            gmtime_r(&now, &timeinfo);
+            // Use time(NULL) directly for more robust check
+            time_t now = time(NULL);
 
-            if (timeinfo.tm_year >= (2020 - 1900))
+            if (now > 1700000000) // After Nov 2023
             {
-                ESP_LOGI(TAG, "NTP Sync successful.");
+                struct tm timeinfo;
+                gmtime_r(&now, &timeinfo);
+
+                char time_str[32];
+                strftime(time_str, sizeof(time_str), "%Y-%m-%d %H:%M:%S UTC", &timeinfo);
+                ESP_LOGI(TAG, "NTP Sync successful: %s", time_str);
                 last_success_tick = xTaskGetTickCount();
+
+                // Check certificate expiry after NTP sync
+                check_certificate_expiry();
             }
             else
             {
-                ESP_LOGE(TAG, "NTP Sync failed. Will retry in next check.");
+                ESP_LOGE(TAG, "NTP Sync failed (time=%ld). Will retry in next check.", (long)now);
                 if (expired_3_days)
                 {
                     vTaskDelay(pdMS_TO_TICKS(NTP_RETRY_DELAY_MS));
