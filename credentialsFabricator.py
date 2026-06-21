@@ -13,6 +13,9 @@ wifi_password = os.getenv('WIFI_PASSWORD')
 static_ip = os.getenv('STATIC_IP')
 gateway = os.getenv('ROUTER_GATEWAY_IP')
 mask = os.getenv('ROUTER_MASK')
+custom_port = os.getenv('CUSTOM_PORT')
+duck_dns_token = os.getenv('DUCK_DNS_TOKEN')
+duck_dns_domain = os.getenv('DUCK_DNS_DOMAIN')
 
 telegram_bot_token = os.getenv('TELEGRAM_BOT_TOKEN')
 telegram_chat_id = os.getenv('TELEGRAM_CHAT_ID')
@@ -68,6 +71,9 @@ with open("secrets.csv", "w", newline="") as csvfile:
     writer.writerow({"key":"use_static_ip", "type":"data", "encoding":"u8","value":static_ip_enabled})
     writer.writerow({"key":"bot_token", "type":"data", "encoding":"string","value":telegram_bot_token})
     writer.writerow({"key":"chat_id", "type":"data", "encoding":"string","value":telegram_chat_id})
+    writer.writerow({"key":"duckdns_token", "type":"data", "encoding":"string","value":duck_dns_token})
+    writer.writerow({"key":"duckdns_domain", "type":"data", "encoding":"string","value":duck_dns_domain})
+    writer.writerow({"key":"custom_port", "type":"data", "encoding":"string", "value":custom_port })
 
     if not random_passwords:
         for i in range(len(user_sessions)):
@@ -104,5 +110,12 @@ with open("secrets.csv", "w", newline="") as csvfile:
         session = user_sessions[i]
         for row in session.to_csv_rows(user_index = i + 1):
             writer.writerow(row)
+
+    cert_update_key = os.getenv('CERT_UPDATE_KEY')
+    if not cert_update_key:
+        raise "No certificate update key string was provided!"
+    writer.writerow({"key": "certs", "type": "namespace", "encoding": "", "value": ""})
+    writer.writerow({"key": "cert_update_key", "type": "data", "encoding": "string", "value": cert_update_key})
+    
 
 print("secrets.csv generated successfully")
