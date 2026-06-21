@@ -12,6 +12,8 @@ esp_err_t nvs_init_and_load_secrets();
 esp_err_t nvs_get_wifi_credentials(char *ssid, size_t ssid_len, char *pass, size_t pass_len);
 esp_err_t nvs_get_static_ip_config(esp_netif_ip_info_t *ip_info, bool *static_enabled);
 esp_err_t nvs_get_telegram_secrets(char *token, size_t token_len, char *chat_id, size_t chat_id_len);
+esp_err_t nvs_get_duckdns_secrets(char *token, size_t token_len, char *domain, size_t domain_len);
+
 
 // Certificate NVS functions
 esp_err_t nvs_load_certs(uint8_t **cert_buf, size_t *cert_len, uint8_t **key_buf, size_t *key_len);

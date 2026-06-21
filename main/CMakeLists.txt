@@ -9,6 +9,7 @@ idf_component_register(
          "utils/telegram/telegram.c"
          "utils/telegram/queue.c"
          "utils/utils.c"
+         "utils/duckdns/duckdns.c"
          "web/handlers/handlers.c"
          "web/routes/routes.c"
          "web/server/server.c"
