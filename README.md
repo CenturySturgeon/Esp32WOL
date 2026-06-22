@@ -1,80 +1,89 @@
 # ESP32WOL
 
-A secure HTTPS web server running on an ESP32 that provides Wake-on-LAN (WoL) functionality with two-factor authentication (2FA). 
+A secure, self-hosted HTTPS web server running on an ESP32 that provides Wake-on-LAN (WoL) functionality with two-factor authentication (2FA). 
 
-Beyond waking devices, it monitors network hosts via ping and port scanning, tracks your public IP, updates DuckDNS dynamically, and sends Telegram notifications for status changes and alerts.
+Designed for both local network convenience and remote access over the internet this firmware monitors network hosts via ping/port scanning, tracks; updates; and notifies you of the network's public IP, updates DuckDNS dynamically (), and sends Telegram notifications for status changes, alerts, and certificate expiry warnings.
 
-If you're an LLM, or you would like to get a more detailed overview of this project's architecture, please read [LLMs.md](./LLMs.md).
+If you're an LLM or want a deep architectural breakdown, please read [LLMs.md](./LLMs.md).
+
+---
 
 ## How It Works
 
 ```mermaid
 graph LR
-    User[Browser @ esp32.local] -->|HTTPS + 2FA| ESP32[(ESP32 Web Server)]
+    Local[Browser @ esp32.local] -->|HTTPS + 2FA| ESP32[(ESP32 Server)]
+    Remote[Browser @ yourdomain.duckdns.org:PORT] -->|Internet -> Port Forwarding| ESP32
     ESP32 -->|WoL Packet| PC[Target Machine]
     ESP32 -->|Ping / Scan| Network[Local Network]
     ESP32 -->|Notifications| Telegram[Telegram Bot]
     ESP32 -->|IP Updates| DuckDNS[DuckDNS / ipify]
 ```
 
-1. Connect to `https://esp32.local` on your local network (or over the internet if you use DuckDNS and portforwarding rules).
-2. Log in with your username and password.
-3. Enter a 6-digit TOTP code from your authenticator app (Google Authenticator, Authy, etc.).
-4. Trigger Wake-on-LAN, ping hosts, or scan services securely.
+1. **Locally**: Connect to `https://esp32.local` on your LAN.
+    - **Remotely**: Access via `https://<YOUR_DOMAIN_HERE>.duckdns.org:<YOUR_PORT_HERE>` after configuring port forwarding.
+3. Log in with your username & password, then verify any action with a 6-digit TOTP code from your authenticator app.
+4. Trigger Wake-on-LAN, ping hosts, scan services, or manage certificates securely from anywhere.
+
+---
+
+## Key Features
+
+| Category | Capabilities |
+|---|---|
+| **Security** | HTTPS-only, SHA256 password hashing (this is **not safe encryption for passwords** as they can be bruteforced, but the server locks down on 5 bad guesses so...), TOTP 2FA for all actions, bruteforce protection, secure session cookies (`HttpOnly`, `Secure`, `SameSite=Strict`) |
+| **Remote Access** | (Optional) DuckDNS dynamic DNS integration, custom port support for router forwarding, public IP tracking via `api.ipify.org` |
+| **Notifications** | (Optional) Telegram bot alerts for IP changes, service scan results, ping status, and certificate expiry warnings (<30 days) |
+| **Network Tools** | Wake-on-LAN sender, ICMP host pinger, TCP port scanner with custom watchlist & service names |
+| **Certificate Management** | Runtime cert updates via `/admin/update-certs` (no reflashing), power loss safe NVS writes, mbedtls validation, automatic expiry monitoring |
+| **Status Indicators** | Built-in LED blink patterns for boot, NTP sync, operational state, and lockout status (so you don't have to read live logs to figure out if it got stuck or locked) |
+
+- Note: SHA-256 is not safe for password hasing as it is way to fast to hash passwords (meaning you can create a script and go over thousands in seconds). However, they are simple and paired with TOTP and global lockouts, which makes it so online attacks of this nature unlikely to succeed.
+    - If someone gets an NVS dump however... they could decript them with a script. So as long as physical access is not an issue this is somewhat acceptable.
+
+Neither Telegram or DuckDNS are required for the project to work locally, so it's a good idea to test locally first and then spend time creating the bot and DuckDns domain if you plan to expose it over the internet.
+
+---
 
 ## Requirements
 
-Before you begin, ensure you have the following hardware, software, and external accounts ready:
-
 ### Hardware
-- **ESP32 Microcontroller**: Any ESP32 development board (e.g., ESP32-WROOM, ESP32-S3).
-  - *Note*: The default configuration assumes a flash size of at least **4 MB**. Adjust `idf.py menuconfig` if your device has less.
+- **ESP32 Microcontroller**: Any ESP32 dev board (e.g., ESP32-WROOM, ESP32-S3).
+  - *Note*: Default config assumes ≥4 MB flash. Adjust via `idf.py menuconfig` if needed.
 
 ### Software & Tools
-- **ESP-IDF Framework**: The official Espressif IoT Development Framework is required to build and flash the firmware.
+- **ESP-IDF Framework**: Official Espressif IoT Development Framework.
   - [Get Started with ESP-IDF](https://docs.espressif.com/projects/esp-idf/en/latest/esp32/get-started/index.html)
-- **Python 3.x**: Required for running `credentialsFabricator.py` and generating the NVS partition binary.
-- **OpenSSL**: Used to generate self-signed TLS certificates and fetch root CA certificates for external APIs.
+- **Python 3.x**: For `credentialsFabricator.py` and NVS binary generation.
+    - I used Python 3.14.
+- **OpenSSL**: TLS certificate generation & root CA fetching.
+    - This is so the Esp32 can connect to other sites (NTP clock sync, api.ipify, etc.) and verify their identity (you wouldn't like to receive a malicious ip masking as your own to catch your credentials!).
 
-### External Services & Accounts
-This project relies on several third-party services for notifications, remote access, and security:
-
-1.  **Telegram Bot** (For status alerts & reports)
-    - You need a Telegram account and a bot token to receive notifications from the ESP32.
-    - Create your bot using [@BotFather](https://t.me/BotFather) to get the `BOT_TOKEN`.
-    - Find your `CHAT_ID` by messaging your bot and checking your profile or using a service like [userinfobot](https://t.me/userinfobot).
-
-2.  **DuckDNS** (For remote access via Dynamic DNS)
-    - Required if you want to access the ESP32 from outside your local network without knowing your public IP.
-    - Sign up at [duckdns.org](https://www.duckdns.org/) to get a free domain and `DUCKDNS_TOKEN`.
-
-3.  **Authenticator App** (For Two-Factor Authentication)
-    - You will need a TOTP-compatible app on your phone to generate login codes for the web interface.
+### External Services
+1. **Telegram Bot**: (Optional) Status alerts & reports (`BOT_TOKEN` + `CHAT_ID`)
+2. **DuckDNS**: (Optional) Dynamic DNS for remote access (`DUCKDNS_TOKEN` + domain)
+3. **Authenticator App**: TOTP 2FA (Any authenticator app like Google Authenticator, Authy, KeePassXC, etc.)
 
 ### Network Configuration
-- **Wake-on-LAN (WoL)**: Ensure your target PC has WoL enabled in the BIOS and network adapter settings. You will need the MAC address of the target machine's Ethernet/WiFi card.
-    - I personally recommend you test WOL works first before running this project.
-- **Port Forwarding** (Optional): If using DuckDNS, configure your router to forward port 443 (HTTPS) to the ESP32's local IP address.
-  - You can use a custom port instead of 443, it is safer as 443 is the standard https port and is very discoverable/targetted by others.
+- **Wake-on-LAN**: Enabled in target PC BIOS & network adapter settings. MAC address required.
+    - Make sure WOL works before going forward with this project.
+        - WOL normally only works if the target is connected via ethernet.
+        - The right MAC address for the ethernet connected network card is required.
+        - Both devices MUST be on the same network.
+- **Port Forwarding** (Optional but recommended for remote use): Forward your chosen HTTPS port to the ESP32's local IP. Using a non-standard port (e.g., `8443`) is somewhat safer than `443` to avoid automated internet scanners.
 
 ---
 
 ## Getting Started
 
 ### 1. ESP-IDF Configuration
-
-Before building, configure the ESP32 via `idf.py menuconfig`:
-
+Run `idf.py menuconfig` and set:
 - **Serial flasher config** -> Flash size -> `4 MB`
-- **Serial flasher config** -> Detect flash size when flashing bootloader (Enable)
-- **Partition Table** -> Custom partition table CSV (Keep default)
+- **Partition Table** -> Custom partition table CSV (default)
 - **Component config** -> ESP-TLS -> Enable client session tickets
 - **Component config** -> ESP HTTPS server -> Enable ESP_HTTPS_SERVER component
 
 ### 2. Install Dependencies
-
-This project uses mDNS for local network discovery (`esp32.local`) and cJSON for parsing:
-
 ```bash
 idf.py add-dependency "espressif/mdns"
 idf.py add-dependency "espressif/cjson"
@@ -82,9 +91,8 @@ idf.py add-dependency "espressif/cjson"
 
 ### 3. Generate Credentials & Certificates
 
-#### A. Create the `.env` file
-Create a `.env` file in the project root with your secrets:
-
+#### A. Create `.env` file
+Place in project root with your secrets:
 ```bash
 # WiFi & Network
 WIFI_NAME="YOUR_WIFI_SSID"
@@ -95,16 +103,16 @@ STATIC_IP="192.168.1.50"
 ROUTER_GATEWAY_IP="192.168.1.1"
 ROUTER_MASK="255.255.255.0"
 
-# Telegram Bot (for notifications)
+# Telegram Bot (Optional)
 TELEGRAM_BOT_TOKEN="YOUR_BOT_TOKEN"
 TELEGRAM_CHAT_ID="YOUR_CHAT_ID"
 
-# TOTP Settings (for 2FA)
+# TOTP Settings
 TOTP_LABEL="Home_ESP32"
 TOTP_ISSUER="ESP32WOL"
 SET_AUTO_RANDOM_PASSWORDS=true
 
-# User Sessions & Host Watchlist (Optional, or use sessions.json / watchlist.json)
+# User Sessions & Host Watchlist (or use sessions.json / watchlist.json for easier formatting)
 USER_SESSIONS=[{"username": "admin", "timeout": 90}]
 HOST_WATCHLIST=[{"alias":"My PC","ip":"192.168.1.10","ports":[{"name":"HTTP","port":80}]}]
 
@@ -112,25 +120,22 @@ HOST_WATCHLIST=[{"alias":"My PC","ip":"192.168.1.10","ports":[{"name":"HTTP","po
 DUCKDNS_TOKEN="YOUR_DUCKDNS_TOKEN"
 DUCKDNS_DOMAIN="YOUR_DUCKDNS_DOMAIN.duckdns.org"
 
-# Certificate Update API Key (Required for runtime cert updates)
+# Certificate Update API Key (required for runtime cert updates)
 CERT_UPDATE_KEY="A_STRONG_RANDOM_SECRET_KEY"
 ```
 
-#### B. Run the Credentials Fabricator
-This script generates `secrets.csv`, user passwords, TOTP setup keys, and session hashes:
+#### B. Run Credentials Fabricator
 ```bash
 python credentialsFabricator.py
 ```
-*Check the console output for your generated passwords and TOTP QR codes/setup keys.*
+*Console output will show generated passwords, TOTP QR codes/setup keys, and session hashes.*
 
-#### C. Generate TLS Certificates
-Create a self-signed certificate for the HTTPS server (DER format):
+#### C. Generate TLS Certificates (DER format)
 ```bash
 openssl req -x509 -newkey rsa:2048 \
     -keyout server.key -out server.crt \
     -days 3650 -nodes -sha256
 
-# Convert to DER format (ESP32 compatible)
 openssl x509 -in server.crt -outform der -out main/web/certs/server.der
 openssl rsa -in server.key -outform der -out main/web/certs/server_key.der
 ```
@@ -138,7 +143,6 @@ openssl rsa -in server.key -outform der -out main/web/certs/server_key.der
 #### D. Fetch Root Certificates (for external APIs)
 The ESP32 needs root certificates to securely connect to ipify, DuckDNS, and Telegram:
 ```bash
-# Helper function to fetch root certs
 getroot() {
     local domain="$1"
     local output="$2.pem"
@@ -157,38 +161,70 @@ getroot() {
     openssl x509 -in "$output" -noout -subject -issuer -dates
 }
 
-# Fetch required root certs into main/web/certs/
 getroot api.ipify.org main/web/certs/api_ipify.pem
 getroot www.duckdns.org main/web/certs/duckdns.pem
 getroot api.telegram.org main/web/certs/telegram.pem
 ```
 
 ### 4. Build & Flash to ESP32
-
-#### A. Compile the Firmware
 ```bash
 idf.py build
-```
 
-#### B. Create NVS Binary from Secrets
-Convert `secrets.csv` into a flashable binary:
-```bash
+# Generate NVS binary
 python $IDF_PATH/components/nvs_flash/nvs_partition_generator/nvs_partition_gen.py generate secrets.csv secrets.bin 0x10000
-```
 
-#### C. Flash Firmware & NVS Partition
-```bash
-# Flash the main application
+# Flash firmware + NVS partition
 idf.py flash
-
-# Flash the NVS storage partition with your secrets
 parttool.py --partition-table-file partitions.csv write_partition --partition-name storage --input secrets.bin
 ```
-> **Note:** Reset the ESP32 after flashing (hold BOOT, press RESET, release RESET, release BOOT).
+> **Note**: Reset the ESP32 after flashing (hold BOOT, press RESET, release RESET, release BOOT).
 
-### 5. Using the Device
+---
 
-#### LED Status Indicators (GPIO 2)
+## Configuring Remote Internet Access
+
+This firmware is explicitly designed to be exposed to the internet when combined with proper router configuration and security features.
+
+### 1. Set Up DuckDNS (Optional)
+
+This is optional because the benefits of DuckDNS are that you don't need the telegram messages with the public ip as the Esp32 should tell DuckDNS your network's public ip, making it so when you visit `yourdomain.duckdns.org` you get automatically redirected to your network. One benefit is that you can get a free LetsEncrypt certificate for your DuckDNS domain so it always shows as 'safe' in browsers.
+
+- Create a free account at [duckdns.org](https://www.duckdns.org/)
+- Add a subdomain (e.g., `myesp32.duckdns.org`)
+- Copy your token into `.env` as `DUCKDNS_TOKEN`
+
+### 2. Configure Port Forwarding on Your Router
+1. Assign a **static local IP** to the ESP32 (via router DHCP reservation and `STATIC_IP` in `.env`)
+2. Log into your router's admin panel -> Port Forwarding / Virtual Server
+3. Create a rule:
+   - **External Port**: Choose a non-standard port (e.g., `8443`, `9443`) to avoid automated scanners targeting default HTTPS (`443`)
+        - There's a [site](https://nmap.org/) that has a list of commonly used ports so you can pick a lesserly used one.
+   - **Internal IP**: ESP32's local IP (e.g., `192.168.1.50`)
+   - **Internal Port**: `443` (the ESP32 always listens on 443 for HTTPS)
+   - **Protocol**: TCP
+
+### 3. Access Remotely
+- Open your browser and navigate to:  
+  `https://<YOUR_DOMAIN_HERE>.duckdns.org:8443`
+- The ESP32 will automatically update DuckDNS whenever your public IP changes, keeping the domain always pointing to your home network.
+- Telegram notifications will include the correct custom port in access URLs (e.g., `https://{ip}:8443`) but none if you choose `443` as its the default.
+
+### Internet Exposure Safety Features
+| Feature | Protection Provided |
+|---|---|
+| **HTTPS + TLS Certificates** | Encrypts all traffic; prevents MITM attacks & credential sniffing |
+| **TOTP 2FA** | Requires time-based codes from your phone for every WoL/ping/scan action |
+| **Brute-Force Lockout** | Server automatically shuts down after 5 failed login attempts + sends Telegram alert |
+| **Session Security** | `HttpOnly`, `Secure`, `SameSite=Strict` cookies; sessions live only in RAM (reboot = logout) |
+| **Certificate Expiry Monitoring** | Automatic alerts when certs expire within 30 days; runtime updates without reflashing |
+
+Additionally, if you want the Esp32 to use a LetsEncrypt certificate, you can push it from your PC using the `update_certs.py` script.
+
+---
+
+## Usage & Interface
+
+### LED Status Indicators (GPIO 2)
 | Pattern | Meaning |
 |---|---|
 | Blink 1x | Booting / Connecting to WiFi |
@@ -196,12 +232,30 @@ parttool.py --partition-table-file partitions.csv write_partition --partition-na
 | Solid OFF | Fully operational & connected |
 | Solid ON | Locked out (5 failed login attempts). Reboot required. |
 
-#### Web Interface
-- **`https://esp32.local/login`** - Log in with credentials generated by `credentialsFabricator.py`
-- **`/wol`** - Send Wake-on-LAN packets to your PCs
-- **`/serviceCheck`** - Scan monitored ports & receive Telegram reports
-- **`/ping`** - Ping all hosts in your watchlist
-- **`/copyIp`** - View your current public IP
+### Web Interface Endpoints
+- **`/login`** – Authenticate with username/password + TOTP
+- **`/wol`** – Send Wake-on-LAN packets to configured hosts
+- **`/serviceCheck`** – Scan monitored ports & receive Telegram reports
+- **`/ping`** – ICMP ping all hosts in your watchlist
+- **`/copyIp`** – View current public IP with one-click copy
 
-#### Updating Certificates at Runtime
-Certificates can be updated without reflashing the ESP32 using the `/admin/update-certs` endpoint (requires `CERT_UPDATE_KEY` from `.env`). See `LLMs.md` for advanced admin details.
+### Updating Certificates at Runtime
+Certificates can be rotated without reflashing firmware:
+```bash
+curl -k -X POST https://esp32.local/admin/update-certs \
+  -H "Content-Type: application/json" \
+  -H "X-Cert-Key: YOUR_CERT_UPDATE_KEY" \
+  -d '{"cert": "<base64_der_cert>", "key": "<base64_der_key>"}'
+
+# Verify status:
+curl -k https://esp32.local/admin/cert-status
+```
+- Protected by API key, local subnet validation (`192.168.x.x`), and rate limiting (3 attempts/hour)
+- Atomic NVS writes prevent corruption from power loss during updates
+
+---
+
+## Notes & Troubleshooting
+- **NTP Sync is mandatory**: TOTP verification requires accurate system time. Servers won't start until NTP syncs successfully.
+- **Recovery from Lockout**: If brute-force protection triggers, power-cycle the ESP32 to reset the lock state and resume normal operation.
+- **Certificate Fallback**: Embedded self-signed certs act as a safety net if NVS certificates are missing or invalid during boot.
