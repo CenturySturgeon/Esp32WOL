@@ -6,6 +6,10 @@
 #include "esp_log.h"
 #include "cJSON.h"
 #include "mbedtls/base64.h"
+#include "lwip/ip_addr.h"
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 
 #include "handlers.h"
 #include "../../auth/auth.h"
@@ -104,6 +108,61 @@ static esp_err_t _get_cookie_value(httpd_req_t *req, const char *cookie_name, ch
 
     free(cookie_buf);
     return ESP_OK;
+}
+
+// Helper to extract a field from URL-encoded POST body
+static bool extract_post_field(const char *body, const char *field_name, char *out_buf, size_t buf_size)
+{
+    if (!body || !field_name || !out_buf || buf_size == 0)
+        return false;
+
+    char *buf = strdup(body);
+    if (!buf)
+        return false;
+
+    bool found = false;
+    char *saveptr = NULL;
+    char *token = strtok_r(buf, "&", &saveptr);
+
+    while (token != NULL)
+    {
+        char key[64] = {0};
+        char value[128] = {0};
+
+        // Split by '='
+        char *eq_pos = strchr(token, '=');
+        if (!eq_pos)
+        {
+            token = strtok_r(NULL, "&", &saveptr);
+            continue;
+        }
+
+        size_t key_len = eq_pos - token;
+        if (key_len >= sizeof(key))
+        {
+            token = strtok_r(NULL, "&", &saveptr);
+            continue;
+        }
+
+        strncpy(key, token, key_len);
+        strcpy(value, eq_pos + 1);
+
+        // URL decode the value
+        url_decode(value);
+
+        if (strcmp(key, field_name) == 0)
+        {
+            strncpy(out_buf, value, buf_size - 1);
+            out_buf[buf_size - 1] = '\0';
+            found = true;
+            break;
+        }
+
+        token = strtok_r(NULL, "&", &saveptr);
+    }
+
+    free(buf);
+    return found;
 }
 
 esp_err_t http_redirect_handler(httpd_req_t *req)
@@ -287,13 +346,68 @@ esp_err_t get_wol_handler(httpd_req_t *req)
     char token[33];
     if (_get_cookie_value(req, "SESSIONID", token, sizeof(token)) == ESP_OK)
     {
-
         if (auth_check_session(token) == ESP_OK)
         {
-            // Authorized
+            // Authorized - inject CSRF token into HTML
             ESP_LOGI(TAG, "Access granted to /wol");
+
+            char csrf_token[33];
+            if (auth_get_csrf_token(token, csrf_token, sizeof(csrf_token)) != ESP_OK)
+            {
+                ESP_LOGE(TAG, "Failed to get CSRF token for WOL page");
+                httpd_resp_set_status(req, "500 Internal Server Error");
+                httpd_resp_send(req, "Internal error", HTTPD_RESP_USE_STRLEN);
+                return ESP_FAIL;
+            }
+
+            // Allocate buffer for modified HTML (worst case: original length + 32 chars)
+            size_t html_len = strlen(wol_html);
+            char *modified_html = malloc(html_len + 64);
+            if (!modified_html)
+            {
+                ESP_LOGE(TAG, "Failed to allocate memory for WOL HTML");
+                httpd_resp_set_status(req, "500 Internal Server Error");
+                httpd_resp_send(req, "Internal error", HTTPD_RESP_USE_STRLEN);
+                return ESP_FAIL;
+            }
+
+            // Replace __CSRF_TOKEN__ placeholder with actual token
+            const char *placeholder = "__CSRF_TOKEN__";
+            size_t placeholder_len = strlen(placeholder);
+
+            const char *src = wol_html;
+            char *dst = modified_html;
+
+            while (true)
+            {
+                const char *found = strstr(src, placeholder);
+                if (!found)
+                {
+                    // No more placeholders found, copy the rest of the string
+                    strcpy(dst, src);
+                    break;
+                }
+
+                // Copy text before the placeholder
+                size_t prefix_len = found - src;
+                if (prefix_len > 0)
+                {
+                    strncpy(dst, src, prefix_len);
+                    dst += prefix_len;
+                }
+
+                // Insert the CSRF token
+                strcpy(dst, csrf_token);
+                dst += strlen(csrf_token);
+
+                // Advance source pointer past the placeholder
+                src = found + placeholder_len;
+            }
+
             httpd_resp_set_type(req, "text/html");
-            httpd_resp_send(req, wol_html, HTTPD_RESP_USE_STRLEN);
+            httpd_resp_send(req, modified_html, strlen(modified_html));
+            free(modified_html);
+
             return ESP_OK;
         }
     }
@@ -311,13 +425,68 @@ esp_err_t get_service_check_handler(httpd_req_t *req)
     char token[33];
     if (_get_cookie_value(req, "SESSIONID", token, sizeof(token)) == ESP_OK)
     {
-
         if (auth_check_session(token) == ESP_OK)
         {
-            // Authorized
+            // Authorized - inject CSRF token into HTML
             ESP_LOGI(TAG, "Access granted to /serviceCheck");
+
+            char csrf_token[33];
+            if (auth_get_csrf_token(token, csrf_token, sizeof(csrf_token)) != ESP_OK)
+            {
+                ESP_LOGE(TAG, "Failed to get CSRF token for service check page");
+                httpd_resp_set_status(req, "500 Internal Server Error");
+                httpd_resp_send(req, "Internal error", HTTPD_RESP_USE_STRLEN);
+                return ESP_FAIL;
+            }
+
+            // Allocate buffer for modified HTML
+            size_t html_len = strlen(serviceCheck_html);
+            char *modified_html = malloc(html_len + 64);
+            if (!modified_html)
+            {
+                ESP_LOGE(TAG, "Failed to allocate memory for service check HTML");
+                httpd_resp_set_status(req, "500 Internal Server Error");
+                httpd_resp_send(req, "Internal error", HTTPD_RESP_USE_STRLEN);
+                return ESP_FAIL;
+            }
+
+            // Replace __CSRF_TOKEN__ placeholder with actual token
+            const char *placeholder = "__CSRF_TOKEN__";
+            size_t placeholder_len = strlen(placeholder);
+
+            const char *src = serviceCheck_html;
+            char *dst = modified_html;
+
+            while (true)
+            {
+                const char *found = strstr(src, placeholder);
+                if (!found)
+                {
+                    // No more placeholders found, copy the rest of the string
+                    strcpy(dst, src);
+                    break;
+                }
+
+                // Copy text before the placeholder
+                size_t prefix_len = found - src;
+                if (prefix_len > 0)
+                {
+                    strncpy(dst, src, prefix_len);
+                    dst += prefix_len;
+                }
+
+                // Insert the CSRF token
+                strcpy(dst, csrf_token);
+                dst += strlen(csrf_token);
+
+                // Advance source pointer past the placeholder
+                src = found + placeholder_len;
+            }
+
             httpd_resp_set_type(req, "text/html");
-            httpd_resp_send(req, serviceCheck_html, HTTPD_RESP_USE_STRLEN);
+            httpd_resp_send(req, modified_html, strlen(modified_html));
+            free(modified_html);
+
             return ESP_OK;
         }
     }
@@ -351,30 +520,10 @@ esp_err_t post_wol_handler(httpd_req_t *req)
 
     char mac[32] = {0}, secure[32] = {0}, broadcast[32] = {0}, pin_str[16] = {0};
 
-    // Parse manually
-    // Split the string by '&' and then look for key=value
-    char *buf = content;
-    char *token = strtok_r(buf, "&", &buf);
-    while (token != NULL)
-    {
-        if (strncmp(token, "macAddress=", 11) == 0)
-        {
-            strncpy(mac, token + 11, sizeof(mac) - 1);
-        }
-        else if (strncmp(token, "secureOn=", 9) == 0)
-        {
-            strncpy(secure, token + 9, sizeof(secure) - 1);
-        }
-        else if (strncmp(token, "broadcastAddress=", 17) == 0)
-        {
-            strncpy(broadcast, token + 17, sizeof(broadcast) - 1);
-        }
-        else if (strncmp(token, "pin=", 4) == 0)
-        {
-            strncpy(pin_str, token + 4, sizeof(pin_str) - 1);
-        }
-        token = strtok_r(NULL, "&", &buf);
-    }
+    extract_post_field(content, "macAddress", mac, sizeof(mac));
+    extract_post_field(content, "secureOn", secure, sizeof(secure));
+    extract_post_field(content, "broadcastAddress", broadcast, sizeof(broadcast));
+    extract_post_field(content, "pin", pin_str, sizeof(pin_str));
 
     // Clean up URL encoding (%3A -> :)
     url_decode(mac);
@@ -384,6 +533,16 @@ esp_err_t post_wol_handler(httpd_req_t *req)
 
     // ESP_LOGI(TAG, "Parsed Results -> MAC: %s, PIN: %s, Broadcast: %s", mac, pin_str, broadcast);
 
+    // Extract and validate CSRF token BEFORE any other auth checks
+    char csrf_token[33] = {0};
+    if (!extract_post_field(content, "csrf_token", csrf_token, sizeof(csrf_token)))
+    {
+        ESP_LOGW(TAG, "CSRF token missing in WOL request");
+        httpd_resp_set_status(req, "403 Forbidden");
+        httpd_resp_send(req, "{\"error\": \"CSRF validation failed\"}", HTTPD_RESP_USE_STRLEN);
+        return ESP_OK;
+    }
+
     char session_token[33];
     uint32_t pin_code = strtoul(pin_str, NULL, 10);
 
@@ -391,6 +550,14 @@ esp_err_t post_wol_handler(httpd_req_t *req)
     {
         if (auth_check_session(session_token) == ESP_OK)
         {
+            if (!auth_validate_csrf_token(session_token, csrf_token))
+            {
+                ESP_LOGW(TAG, "CSRF token invalid for WOL request");
+                auth_logout_user(session_token);
+                httpd_resp_set_status(req, "403 Forbidden");
+                httpd_resp_send(req, "{\"error\": \"CSRF validation failed\"}", HTTPD_RESP_USE_STRLEN);
+                return ESP_OK;
+            }
             if (auth_check_totp_request(session_token, pin_code) == ESP_OK)
             {
 
@@ -433,24 +600,19 @@ esp_err_t post_ping_handler(httpd_req_t *req)
     // ESP_LOGI(TAG, "Full POST Body: %s", content);
 
     char pin_str[16] = {0};
-
-    // Parse manually
-    // Split the string by '&' and then look for key=value
-    char *buf = content;
-    char *token = strtok_r(buf, "&", &buf);
-    while (token != NULL)
-    {
-        if (strncmp(token, "pin=", 4) == 0)
-        {
-            strncpy(pin_str, token + 4, sizeof(pin_str) - 1);
-        }
-        token = strtok_r(NULL, "&", &buf);
-    }
-
-    // Clean up URL encoding (%3A -> :)
-    url_decode(pin_str);
+    extract_post_field(content, "pin", pin_str, sizeof(pin_str));
 
     // ESP_LOGI(TAG, "Parsed Results -> PIN: %s", pin_str);
+
+    // Extract and validate CSRF token BEFORE any other auth checks
+    char csrf_token[33] = {0};
+    if (!extract_post_field(content, "csrf_token", csrf_token, sizeof(csrf_token)))
+    {
+        ESP_LOGW(TAG, "CSRF token missing in ping request");
+        httpd_resp_set_status(req, "403 Forbidden");
+        httpd_resp_send(req, "{\"error\": \"CSRF validation failed\"}", HTTPD_RESP_USE_STRLEN);
+        return ESP_OK;
+    }
 
     char session_token[33];
     uint32_t pin_code = strtoul(pin_str, NULL, 10);
@@ -459,9 +621,17 @@ esp_err_t post_ping_handler(httpd_req_t *req)
     {
         if (auth_check_session(session_token) == ESP_OK)
         {
+            if (!auth_validate_csrf_token(session_token, csrf_token))
+            {
+                ESP_LOGW(TAG, "CSRF token invalid for ping request");
+                auth_logout_user(session_token);
+                httpd_resp_set_status(req, "403 Forbidden");
+                httpd_resp_send(req, "{\"error\": \"CSRF validation failed\"}", HTTPD_RESP_USE_STRLEN);
+                return ESP_OK;
+            }
+
             if (auth_check_totp_request(session_token, pin_code) == ESP_OK)
             {
-
                 ESP_LOGI(TAG, "Success! Pinging hosts");
                 auth_logout_user(session_token);
 
@@ -503,24 +673,19 @@ esp_err_t post_serviceCheck_handler(httpd_req_t *req)
     // ESP_LOGI(TAG, "Full POST Body: %s", content);
 
     char pin_str[16] = {0};
-
-    // Parse manually
-    // Split the string by '&' and then look for key=value
-    char *buf = content;
-    char *token = strtok_r(buf, "&", &buf);
-    while (token != NULL)
-    {
-        if (strncmp(token, "pin=", 4) == 0)
-        {
-            strncpy(pin_str, token + 4, sizeof(pin_str) - 1);
-        }
-        token = strtok_r(NULL, "&", &buf);
-    }
-
-    // Clean up URL encoding (%3A -> :)
-    url_decode(pin_str);
+    extract_post_field(content, "pin", pin_str, sizeof(pin_str));
 
     // ESP_LOGI(TAG, "Parsed Results -> PIN: %s", pin_str);
+
+    // Extract and validate CSRF token BEFORE any other auth checks
+    char csrf_token[33] = {0};
+    if (!extract_post_field(content, "csrf_token", csrf_token, sizeof(csrf_token)))
+    {
+        ESP_LOGW(TAG, "CSRF token missing in service check request");
+        httpd_resp_set_status(req, "403 Forbidden");
+        httpd_resp_send(req, "{\"error\": \"CSRF validation failed\"}", HTTPD_RESP_USE_STRLEN);
+        return ESP_OK;
+    }
 
     char session_token[33];
     uint32_t pin_code = strtoul(pin_str, NULL, 10);
@@ -529,6 +694,14 @@ esp_err_t post_serviceCheck_handler(httpd_req_t *req)
     {
         if (auth_check_session(session_token) == ESP_OK)
         {
+            if (!auth_validate_csrf_token(session_token, csrf_token))
+            {
+                ESP_LOGW(TAG, "CSRF token invalid for service check request");
+                auth_logout_user(session_token);
+                httpd_resp_set_status(req, "403 Forbidden");
+                httpd_resp_send(req, "{\"error\": \"CSRF validation failed\"}", HTTPD_RESP_USE_STRLEN);
+                return ESP_OK;
+            }
             if (auth_check_totp_request(session_token, pin_code) == ESP_OK)
             {
 
@@ -673,6 +846,36 @@ esp_err_t post_update_certs_handler(httpd_req_t *req)
     }
 
     free(cert_key);
+
+    // Check if client is on local subnet using dynamic validation
+    // Use INET6_ADDRSTRLEN to safely hold both IPv4 and IPv6 strings
+    char client_ip_str[INET6_ADDRSTRLEN] = {0};
+
+    int sockfd = httpd_req_to_sockfd(req);
+    struct sockaddr_storage addr;
+    socklen_t addr_len = sizeof(addr);
+
+    if (getpeername(sockfd, (struct sockaddr *)&addr, &addr_len) == 0)
+    {
+        if (addr.ss_family == AF_INET)
+        {
+            struct sockaddr_in *s = (struct sockaddr_in *)&addr;
+            inet_ntop(AF_INET, &s->sin_addr, client_ip_str, sizeof(client_ip_str));
+        }
+        else if (addr.ss_family == AF_INET6)
+        {
+            struct sockaddr_in6 *s = (struct sockaddr_in6 *)&addr;
+            inet_ntop(AF_INET6, &s->sin6_addr, client_ip_str, sizeof(client_ip_str));
+        }
+    }
+
+    if (!is_local_subnet(client_ip_str))
+    {
+        ESP_LOGW(TAG, "Admin access denied: Client %s not on local subnet", client_ip_str);
+        httpd_resp_set_status(req, "403 Forbidden");
+        httpd_resp_send(req, "{\"error\": \"Access denied: Local network only\"}", HTTPD_RESP_USE_STRLEN);
+        return ESP_OK;
+    }
 
     // Parse JSON payload
     const size_t MAX_JSON_SIZE = 4096;

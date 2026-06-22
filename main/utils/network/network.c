@@ -10,9 +10,11 @@
 #include "lwip/sys.h"
 #include "esp_log.h"
 #include "ping/ping_sock.h"
+#include "esp_netif.h"
 
 #include "network.h"
 #include "../telegram/queue.h"
+#include "../../utils/nvs/nvs_utils.h"
 
 // Shared state for the batch ping operation
 static struct
@@ -26,6 +28,83 @@ static host_t *hosts_list = NULL;
 static uint8_t total_hosts_count = 0;
 
 static const char *TAG = "NETWORK UTILS";
+
+bool is_local_subnet(const char *client_ip)
+{
+    if (!client_ip || strlen(client_ip) == 0)
+        return false;
+
+    const char *check_ip = client_ip;
+
+    // Handle IPv4 mapped IPv6 addresses (::ffff:x.x.x.x or ::FFFF:x.x.x.x) ---
+    // These occur when dual stack networking resolves an IPv4 connection as IPv6.
+    if (strncmp(client_ip, "::ffff:", 7) == 0 || strncmp(client_ip, "::FFFF:", 7) == 0)
+    {
+        check_ip = client_ip + 7; // Strip the prefix to get pure IPv4
+    }
+
+    // Pure IPv6 Handling (Check for ':' in IP string)
+    if (strchr(check_ip, ':'))
+    {
+        esp_netif_t *netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
+        if (!netif)
+            return false;
+
+        esp_ip6_addr_t local_ip6;
+        if (esp_netif_get_ip6_linklocal(netif, &local_ip6) != ESP_OK)
+        {
+            return false;
+        }
+
+        // Parse client IPv6 string into standard binary format
+        struct in6_addr client_in6 = {0};
+        if (inet_pton(AF_INET6, check_ip, &client_in6) <= 0)
+        {
+            return false;
+        }
+
+        // Compare the first 8 bytes (64 bits) standard LAN prefix length
+        uint8_t *local_bytes = (uint8_t *)&local_ip6;
+        uint8_t *client_bytes = (uint8_t *)&client_in6;
+
+        for (int i = 0; i < 8; i++)
+        {
+            if (local_bytes[i] != client_bytes[i])
+            {
+                return false; // Prefix mismatch, not on local subnet
+            }
+        }
+        return true; // IPv6 prefix matches!
+    }
+
+    // IPv4 Handling
+    esp_netif_ip_info_t ip_info;
+    esp_err_t err = nvs_get_static_ip_config(&ip_info, NULL);
+
+    if (err != ESP_OK)
+    {
+        esp_netif_t *netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
+        if (netif)
+        {
+            esp_netif_get_ip_info(netif, &ip_info);
+        }
+        else
+        {
+            return false;
+        }
+    }
+
+    uint32_t client_ip_int = ipaddr_addr(check_ip);
+    uint32_t local_ip_int = ip_info.ip.addr;
+    uint32_t subnet_mask_int = ip_info.netmask.addr;
+
+    if ((client_ip_int & subnet_mask_int) == (local_ip_int & subnet_mask_int))
+    {
+        return true;
+    }
+
+    return false;
+}
 
 static void batch_ping_on_ping_end(esp_ping_handle_t hdl, void *args)
 {

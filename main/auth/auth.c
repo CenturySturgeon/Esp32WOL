@@ -81,6 +81,66 @@ static void auth_reset_failed_logins(void)
     ESP_LOGI(TAG, "Failed login counter reset");
 }
 
+static esp_err_t auth_get_user_index_by_token(const char *token, int *out_index)
+{
+    if (!token || !out_index)
+        return ESP_ERR_INVALID_ARG;
+    for (int i = 0; i < total_users_count; i++)
+    {
+        if (strlen(users_list[i].session_token) > 0 &&
+            strcmp(users_list[i].session_token, token) == 0)
+        {
+            *out_index = i;
+            return ESP_OK;
+        }
+    }
+    return ESP_ERR_NOT_FOUND;
+}
+
+esp_err_t auth_get_csrf_token(const char *session_token, char *out_buf, size_t buf_size)
+{
+    if (!session_token || !out_buf || buf_size < 33)
+        return ESP_ERR_INVALID_ARG;
+
+    int user_index = -1;
+    if (auth_get_user_index_by_token(session_token, &user_index) != ESP_OK)
+    {
+        return ESP_ERR_NOT_FOUND;
+    }
+
+    strncpy(out_buf, users_list[user_index].csrf_token, buf_size - 1);
+    out_buf[buf_size - 1] = '\0';
+    return ESP_OK;
+}
+
+// Constant time comparison to prevent timing attacks
+static bool constant_time_compare(const char *a, const char *b)
+{
+    if (strlen(a) != strlen(b))
+        return false;
+
+    volatile uint8_t result = 0;
+    for (size_t i = 0; i < strlen(a); i++)
+    {
+        result |= a[i] ^ b[i];
+    }
+    return result == 0;
+}
+
+bool auth_validate_csrf_token(const char *session_token, const char *provided_token)
+{
+    if (!session_token || !provided_token)
+        return false;
+
+    int user_index = -1;
+    if (auth_get_user_index_by_token(session_token, &user_index) != ESP_OK)
+    {
+        return false;
+    }
+
+    return constant_time_compare(users_list[user_index].csrf_token, provided_token);
+}
+
 static esp_err_t auth_get_user_hmac_via_token(const char *token, uint8_t *hmac_out, size_t *hmac_len)
 {
     if (!token || !hmac_out || !hmac_len)
@@ -162,6 +222,7 @@ esp_err_t auth_logout_user(const char *token)
         {
             memset(users_list[i].session_token, 0, sizeof(users_list[i].session_token));
             users_list[i].session_expiry = 0;
+            memset(users_list[i].csrf_token, 0, sizeof(users_list[i].csrf_token)); // Clear CSRF token
 
             ESP_LOGI(TAG, "User %s logged out successfully", users_list[i].name);
 
@@ -212,7 +273,6 @@ esp_err_t auth_login_user(const char *username, const char *password, char *out_
     {
         if (strcmp(users_list[i].name, username) == 0)
         {
-
             // Compare Hashes
             if (strcmp(users_list[i].hash, hash_string) == 0)
             {
@@ -224,6 +284,10 @@ esp_err_t auth_login_user(const char *username, const char *password, char *out_
                 uint8_t rand_bytes[16];
                 esp_fill_random(rand_bytes, 16);
                 bytes_to_hex(rand_bytes, users_list[i].session_token, 16);
+
+                // Generate CSRF Token (Random Hex)
+                esp_fill_random(rand_bytes, 16);
+                bytes_to_hex(rand_bytes, users_list[i].csrf_token, 16);
 
                 // Set Expiry (TTL is in seconds, convert to microseconds)
                 // If stored TTL is 0 return
@@ -249,7 +313,7 @@ esp_err_t auth_login_user(const char *username, const char *password, char *out_
         }
     }
 
-    ESP_LOGW(TAG, "User %s not found", username);
+    ESP_LOGW(TAG, "User %s not found");
     auth_register_failed_login();
     return ESP_FAIL;
 }

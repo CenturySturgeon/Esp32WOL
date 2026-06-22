@@ -22,6 +22,7 @@ typedef struct
     uint8_t hmac[10];       // Binary TOTP key
     char session_token[33]; // 32 chars + null
     int64_t session_expiry; // Timestamp in microseconds
+    char csrf_token[33];    // 32 chars + null for CSRF protection
 } user_session_t;
 
 esp_err_t auth_set_user_list(user_session_t *list, uint8_t count);
@@ -31,6 +32,10 @@ esp_err_t auth_login_user(const char *username, const char *password, char *out_
 esp_err_t auth_check_session(const char *token);
 esp_err_t auth_check_totp_request(const char *token, const uint32_t pin);
 esp_err_t auth_semaphore_init();
+
+// CSRF Token Management
+esp_err_t auth_get_csrf_token(const char *session_token, char *out_buf, size_t buf_size);
+bool auth_validate_csrf_token(const char *session_token, const char *provided_token);
 
 extern SemaphoreHandle_t auth_mutex;
 

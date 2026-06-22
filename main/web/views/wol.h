@@ -165,6 +165,7 @@ static const char wol_html[] = R"HTML(
         <div class="input-group">
           <button class="input" type="submit">WAKE UP</button>
         </div>
+        <input type="hidden" name="csrf_token" value="__CSRF_TOKEN__" />
       </form>
     </div>
     <script>

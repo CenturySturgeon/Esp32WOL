@@ -113,6 +113,7 @@ static const char serviceCheck_html[] = R"HTML(
           Check Services
         </button>
       </div>
+      <input type="hidden" name="csrf_token" value="__CSRF_TOKEN__" />
     </form>
 
   </div>
