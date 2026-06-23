@@ -38,8 +38,8 @@ graph LR
 | **Certificate Management** | Runtime cert updates via `/admin/update-certs` (no reflashing), power loss safe NVS writes, mbedtls validation, automatic expiry monitoring |
 | **Status Indicators** | Built-in LED blink patterns for boot, NTP sync, operational state, and lockout status (so you don't have to read live logs to figure out if it got stuck or locked) |
 
-- Note: SHA-256 is not safe for password hasing as it is way to fast to hash passwords (meaning you can create a script and go over thousands in seconds). However, they are simple and paired with TOTP and global lockouts, which makes it so online attacks of this nature unlikely to succeed.
-    - If someone gets an NVS dump however... they could decript them with a script. So as long as physical access is not an issue this is somewhat acceptable.
+- **Password Security Note**: Passwords are hashed using salted `PBKDF2-HMAC-SHA256` (100,000 iterations). This makes offline brute-force attacks significantly slower and more resource-intensive compared to standard hashing algorithms. 
+    - Combined with TOTP 2FA and automatic server lockouts after failed attempts, the firmware provides robust protection against both online guessing and offline credential extraction.
 
 Neither Telegram or DuckDNS are required for the project to work locally, so it's a good idea to test locally first and then spend time creating the bot and DuckDns domain if you plan to expose it over the internet.
 
@@ -250,7 +250,7 @@ curl -k -X POST https://esp32.local/admin/update-certs \
 # Verify status:
 curl -k https://esp32.local/admin/cert-status
 ```
-- Protected by API key, local subnet validation (`192.168.x.x`), and rate limiting (3 attempts/hour)
+- Protected by API key, dynamic subnet validation, and rate limiting (3 attempts/hour)
 - Atomic NVS writes prevent corruption from power loss during updates
 
 ---
