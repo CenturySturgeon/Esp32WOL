@@ -6,7 +6,7 @@ import sys
 
 load_dotenv()
 
-ESP32_HOST = os.getenv('ACCESS_DOMAIN')  # domain name | esp32.local | device IP
+ESP32_HOST = os.getenv('ACCESS_DOMAIN')  # MDNS name | esp32.local | device IP
 CERT_UPDATE_KEY = os.getenv("CERT_UPDATE_KEY")  # Paste the key from .env here
 
 def push_certificates(cert_der_path, key_der_path):
