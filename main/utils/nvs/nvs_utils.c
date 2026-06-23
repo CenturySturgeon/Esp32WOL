@@ -127,8 +127,8 @@ static esp_err_t nvs_load_sessions()
 
             // Load HMAC Binary Blob
             snprintf(key, sizeof(key), "user_%d_hmac", i);
-            required_size = sizeof(temp_list[i - 1].hmac);                    // Fixed
-            nvs_get_blob(handle, key, temp_list[i - 1].hmac, &required_size); // Fixed
+            required_size = sizeof(temp_list[i - 1].hmac);
+            nvs_get_blob(handle, key, temp_list[i - 1].hmac, &required_size);
         }
     }
 
