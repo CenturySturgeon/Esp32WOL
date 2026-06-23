@@ -25,7 +25,8 @@ class UserSession:
         self.uname = user_name
         self.timeout = str(session_timeout)
         self.pin = self.get_random_pin_Code()
-        self.accessHash = self.generate_sha256_hash(self.pin)
+        # Generate PBKDF2-HMAC-SHA256 hash with salt
+        self.salt, self.accessHash = self.generate_pbkdf2_hash(self.pin)
         self.hmacKey = self.create_qr_code(self.uname, totp_label, totp_issuer)
         print(f'{self.uname} PIN: {self.pin}')
     
@@ -44,6 +45,25 @@ class UserSession:
         return sha256_hash
 
     @staticmethod
+    def generate_pbkdf2_hash(password: str, iterations: int = 100000) -> tuple:
+        """
+        Generates a PBKDF2-HMAC-SHA256 hash with a random salt.
+        Parameters:
+            password (str): The password to hash.
+            iterations (int): Number of PBKDF2 iterations (default 100,000).
+        Returns:
+            tuple: (salt_hex, hash_hex) where both are hex-encoded strings.
+        """
+        # Generate a random 16-byte salt
+        salt = os.urandom(16)
+
+        # Compute PBKDF2-HMAC-SHA256
+        dk = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt, iterations)
+
+        # Return as hex strings for NVS storage
+        return (salt.hex(), dk.hex())
+
+    @staticmethod
     def get_random_pin_Code() -> str:
         """Returns a random eight character code."""
         chars = string.digits + string.ascii_letters
@@ -55,19 +75,19 @@ class UserSession:
         """Returns a random secret key consisting of random A-Z characters and numbers from 2-8."""
         characters = string.ascii_uppercase + ''.join(str(i) for i in range(2, 8))
         return ''.join(random.choice(characters) for _ in range(16))
-    
+
     @staticmethod
     def create_qr_code(user_name: str, label: str, issuer: str) -> str:
         """
         Creates a QR code for the TOTP authentication app, saves it, and returns its hmac key.
-        
+
         Params:
             user_name (str): The name that the QR code .png image will have.
             label (str): The name this code will have in the TOTP authentication app.
             issuer (str): The name of the institution (in this case yourself) that generated this QR code.
 
         Returns
-            str: The hmac key byte array as a string. 
+            str: The hmac key byte array as a string.
         """
         # Replace this with your secret key (16 characters string composed of A-Z and 2-7). You can generate a random one using the randomSecretKey.py file.
         secret_key = UserSession.get_random_secret_key()
@@ -89,7 +109,7 @@ class UserSession:
         # print(f"uint8_t hmacKey[] = {{ {hmac_key} }};")
 
         # Check if the QRcodes folder exists, if not, create it
-        os.makedirs('./QRcodes/', exist_ok=True) 
+        os.makedirs('./QRcodes/', exist_ok=True)
 
         # Save the QR code in the same folder as the script is located
         img.save("./QRcodes/" + user_name + ".png")
@@ -99,7 +119,7 @@ class UserSession:
     def toString(self):
         """Returns the user session values as a string inside brackets '{}'."""
         return f'{{"{self.uname}", "{self.accessHash}", {{ {self.hmacKey} }}, {self.timeout}}}'
-    
+
     def to_csv_rows(self, user_index: int = 1):
         """
         Returns CSV rows for this user session.
@@ -122,7 +142,15 @@ class UserSession:
             "value": self.timeout
         })
 
-        # SHA256 hash row
+        # PBKDF2 Salt row (16 bytes = 32 hex chars)
+        rows.append({
+            "key": f"user_{user_index}_salt",
+            "type": "data",
+            "encoding": "string",
+            "value": self.salt
+        })
+
+        # PBKDF2 hash row (32 bytes = 64 hex chars)
         rows.append({
             "key": f"user_{user_index}_hash",
             "type": "data",

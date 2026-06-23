@@ -94,9 +94,7 @@ with open("secrets.csv", "w", newline="") as csvfile:
         for i in range(len(user_sessions)):
             session = user_sessions[i]
             new_user_password = getpass.getpass(f"Enter password for user '{session.uname}': ")
-            hashed_password = session.generate_sha256_hash(new_user_password)
-            session.accessHash = hashed_password
-
+            session.salt, session.accessHash = session.generate_pbkdf2_hash(new_user_password)
     # Write the host's info
     for i, host in enumerate(hosts):
         writer.writerow({"key":f"alias_h_{i}", "type":"data", "encoding":"string","value":host['alias']})
