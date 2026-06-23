@@ -1,9 +1,9 @@
 #include "esp_https_server.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
-#include "mbedtls/sha256.h"
-
 #include "esp_random.h"
+#include "mbedtls/pkcs5.h"         // For PBKDF2-HMAC-SHA256
+#include "mbedtls/platform_util.h" // For mbedtls_platform_zeroize
 
 #include "auth.h"
 #include "totp.h"
@@ -13,6 +13,11 @@
 #include "../utils/telegram/queue.h"
 
 static const char *TAG = "AUTH_SYSTEM";
+
+// PBKDF2 parameters
+#define PBKDF2_ITERATIONS 100000
+#define SALT_LEN 16 // 16 bytes salt
+#define HASH_LEN 32 // SHA-256 produces 32 bytes
 
 static user_session_t *users_list = NULL;
 static uint8_t total_users_count = 0;
@@ -27,10 +32,22 @@ static uint8_t MAX_FAILED_LOGINS = 5;
 static uint8_t failed_login_count = 0;
 SemaphoreHandle_t auth_mutex = NULL;
 
+// Constant time (not as in O(n)) memory comparison
+static int ct_memcmp(const void *a, const void *b, size_t n)
+{
+    const unsigned char *p1 = (const unsigned char *)a;
+    const unsigned char *p2 = (const unsigned char *)b;
+    volatile unsigned char result = 0;
+    for (size_t i = 0; i < n; i++)
+    {
+        result |= p1[i] ^ p2[i];
+    }
+    return result == 0 ? 0 : -1;
+}
+
 static void stop_servers_task(void *arg)
 {
     ESP_LOGW(TAG, "Stopping servers...");
-
     if (https_server)
     {
         httpd_ssl_stop(https_server);
@@ -49,7 +66,6 @@ static void stop_servers_task(void *arg)
 static void auth_register_failed_login(void)
 {
     xSemaphoreTake(auth_mutex, portMAX_DELAY);
-
     failed_login_count++;
     ESP_LOGW(TAG, "Failed login attempt %d/%d",
              failed_login_count, MAX_FAILED_LOGINS);
@@ -68,7 +84,6 @@ static void auth_register_failed_login(void)
             ESP_LOGE(TAG, "Max failed logins reached. Stopping HTTPS server.");
         }
     }
-
     xSemaphoreGive(auth_mutex);
 }
 
@@ -260,21 +275,53 @@ esp_err_t auth_login_user(const char *username, const char *password, char *out_
     if (!users_list || !username || !password)
         return ESP_FAIL;
 
-    // Hash the incoming password
-    unsigned char sha_output[32];
-    char hash_string[65];
-
-    // Note: mbedtls_sha256 takes (input, length, output, is_224)
-    mbedtls_sha256((const unsigned char *)password, strlen(password), sha_output, 0);
-    bytes_to_hex(sha_output, hash_string, 32);
-
-    // Find User and Compare
+    // Find User and Verify Password with PBKDF2
     for (int i = 0; i < total_users_count; i++)
     {
         if (strcmp(users_list[i].name, username) == 0)
         {
-            // Compare Hashes
-            if (strcmp(users_list[i].hash, hash_string) == 0)
+            // Convert stored salt hex to binary
+            unsigned char salt_bin[SALT_LEN];
+            int salt_bytes = hex_to_bin(users_list[i].salt, salt_bin, SALT_LEN);
+            if (salt_bytes != SALT_LEN)
+            {
+                ESP_LOGE(TAG, "Invalid salt format for user %s", username);
+                auth_register_failed_login();
+                return ESP_FAIL;
+            }
+
+            // Compute PBKDF2-HMAC-SHA256 hash of input password
+            unsigned char computed_hash[HASH_LEN];
+            int ret = mbedtls_pkcs5_pbkdf2_hmac_ext(
+                MBEDTLS_MD_SHA256,
+
+                (const unsigned char *)password, strlen(password),
+                salt_bin, SALT_LEN,
+                PBKDF2_ITERATIONS,
+                HASH_LEN,
+
+                computed_hash);
+
+            if (ret != 0)
+            {
+                ESP_LOGE(TAG, "PBKDF2 failed: -0x%04X", -ret);
+                mbedtls_platform_zeroize(computed_hash, HASH_LEN);
+                auth_register_failed_login();
+                return ESP_FAIL;
+            }
+
+            // Convert stored hash hex to binary for comparison
+            unsigned char stored_hash_bin[HASH_LEN];
+            int hash_bytes = hex_to_bin(users_list[i].hash, stored_hash_bin, HASH_LEN);
+            if (hash_bytes != HASH_LEN)
+            {
+                ESP_LOGE(TAG, "Invalid hash format for user %s", username);
+                auth_register_failed_login();
+                return ESP_FAIL;
+            }
+
+            // Constant-time comparison to prevent timing attacks
+            if (ct_memcmp(computed_hash, stored_hash_bin, HASH_LEN) == 0)
             {
                 ESP_LOGI(TAG, "Password match for %s", username);
 
@@ -313,7 +360,7 @@ esp_err_t auth_login_user(const char *username, const char *password, char *out_
         }
     }
 
-    ESP_LOGW(TAG, "User %s not found");
+    ESP_LOGW(TAG, "User %s not found", username);
     auth_register_failed_login();
     return ESP_FAIL;
 }

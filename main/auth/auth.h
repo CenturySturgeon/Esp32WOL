@@ -18,7 +18,8 @@ typedef struct
 {
     char name[32];
     uint8_t ttl;            // Session TTL in seconds
-    char hash[65];          // Hex string for SHA256 (32 bytes * 2 + null)
+    char salt[33];          // Hex string for PBKDF2 salt (16 bytes * 2 + null)
+    char hash[65];          // Hex string for PBKDF2-HMAC-SHA256 (32 bytes * 2 + null)
     uint8_t hmac[10];       // Binary TOTP key
     char session_token[33]; // 32 chars + null
     int64_t session_expiry; // Timestamp in microseconds
