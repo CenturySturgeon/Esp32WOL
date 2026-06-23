@@ -17,7 +17,7 @@ idf_component_register(
          "wifi/public_ip/public_ip.c"
          "wifi/wifi.c"
     INCLUDE_DIRS "."
-    REQUIRES esp_https_server nvs_flash esp_netif esp_wifi esp_http_client mdns esp_driver_gpio esp_timer cjson
+    REQUIRES esp_https_server nvs_flash esp_netif esp_wifi esp_http_client mdns esp_driver_gpio esp_timer cjson mbedtls
     EMBED_FILES
         # Root CA certificates for outbound HTTPS clients (ipify, DuckDNS, Telegram)
         "web/certs/api_ipify.pem"
