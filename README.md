@@ -123,8 +123,8 @@ WIFI_PASSWORD="YOUR_WIFI_PASS"
 
 # (Optional) Static IP for the ESP32
 STATIC_IP="192.168.1.50"
-ROUTER_GATEWAY_IP="192.168.1.1"
-ROUTER_MASK="255.255.255.0"
+ROUTER_GATEWAY_IP="192.168.x.x" # Check your router's config
+ROUTER_MASK="255.255.x.x" # Check your router's config
 
 # Telegram Bot (Optional)
 TELEGRAM_BOT_TOKEN="YOUR_BOT_TOKEN"
@@ -145,6 +145,8 @@ DUCKDNS_DOMAIN="YOUR_DUCKDNS_DOMAIN.duckdns.org"
 
 # Certificate Update API Key (required for runtime cert updates)
 CERT_UPDATE_KEY="A_STRONG_RANDOM_SECRET_KEY"
+# If you plan to push a cert
+ACCESS_DOMAIN="ESP32_MDNS_ADDRESS" # esp32.local by default
 ```
 
 #### B. Run Credentials Fabricator
@@ -166,7 +168,7 @@ openssl x509 -in server.crt -outform der -out main/web/certs/server.der
 openssl rsa -in server.key -outform der -out main/web/certs/server_key.der
 ```
 
-If you plan to use a Let's Encrypt cert using `update_certs.py` you'll split it into two .der files with the following commands:
+If you plan to use a Let's Encrypt cert using `update_certs.py` you'll have to split it into two .der files with the following commands:
 
 ```bash
 openssl x509 -in /etc/letsencrypt/live/mydomain.com/fullchain.pem -outform der -out new_server.der
@@ -254,10 +256,12 @@ This is optional because the benefits of DuckDNS are that you don't need the tel
 | Feature                           | Protection Provided                                                                          |
 | --------------------------------- | -------------------------------------------------------------------------------------------- |
 | **HTTPS + TLS Certificates**      | Encrypts all traffic; prevents MITM attacks & credential sniffing                            |
-| **TOTP 2FA**                      | Requires time-based codes from your phone for every WoL/ping/scan action                     |
+| **TOTP 2FA**                      | Requires time-based codes from your phone/device for every WoL/ping/scan action                     |
 | **Brute-Force Lockout**           | Server automatically shuts down after 5 failed login attempts + sends Telegram alert         |
 | **Session Security**              | `HttpOnly`, `Secure`, `SameSite=Strict` cookies; sessions live only in RAM (reboot = logout) |
 | **Certificate Expiry Monitoring** | Automatic alerts when certs expire within 30 days; runtime updates without reflashing        |
+
+- **Disclaimer**: Any action you perform will log you out. This is a security measure by design to avoid multiple exploits in a single session.
 
 Additionally, if you want the Esp32 to use a LetsEncrypt certificate, you can push it from your PC using the `update_certs.py` script.
 
@@ -282,7 +286,8 @@ It's hard to know what's going on with the Esp32 once it's not plugged to the co
 
 For any action you wish to perform you'll first need to sign in with your username and password on the home page.
 
-> **[INSERT SCREENSHOT: wol_dashboard.png]**
+<img width="240" height="286" alt="login" src="https://github.com/user-attachments/assets/24f3518d-dfbc-421a-9d1b-38d4f32b7941" />
+
 
 After signing in, you'll be automatically redirected to the wake on lan page.
 
@@ -290,8 +295,7 @@ After signing in, you'll be automatically redirected to the wake on lan page.
 
 This is the primary landing page after login. It allows you to send magic packets to turn on remote devices.
 
-> **[INSERT SCREENSHOT: wol_dashboard.png]**
-> _Caption: The WoL form showing MAC, SecureOn, Broadcast IP fields, and the 2FA PIN input._
+<img width="240" height="286" alt="WoL" src="https://github.com/user-attachments/assets/b11a4e3b-a5b2-43f3-9cad-038b881cc3cf" />
 
 **Form Fields Explained:**
 
@@ -310,8 +314,7 @@ You can also go to the service check page by clicking the arrow on the top right
 
 The Service Check page acts as a hub for network diagnostics. It allows you to Ping hosts and check specific service ports without leaving the browser.
 
-> **[INSERT SCREENSHOT: service_check_hub.png]**
-> _Caption: The Service Check hub with two buttons: "Ping Hosts" and "Check Services"._
+<img width="240" height="286" alt="scan" src="https://github.com/user-attachments/assets/1f805928-5190-4bb8-8efb-2d01e4b7e523" />
 
 **Navigation:**
 You can access this page directly via `/serviceCheck` or by clicking the **arrow icon** in the top-right corner of the WoL dashboard.
@@ -329,12 +332,11 @@ You can access this page directly via `/serviceCheck` or by clicking the **arrow
     - It requires a valid TOTP PIN.
     - Results are sent over by the telegram bot.
 
-**DISCLAIMER**: Although the telegram bot is optional for the server's functionality _it is not_ for displaying the results of network discovery operations. The reason is that an internet exposed discovery tool is too dangerous, so only devices defined in the watchlist can be scanned and results are sent over the secure channel (your telegram bot).
-
-> **[INSERT SCREENSHOT: service_results.png]**
-> _Caption: Example results showing successful ping and port scan outcomes._
+**DISCLAIMER**: Although the telegram bot is optional for the server's functionality _it is not_ for displaying the results of network discovery operations. The reason is that I deemed an internet exposed discovery tool is too dangerous, so only devices defined in the watchlist can be scanned and results are sent over the secure channel (your telegram bot).
 
 #### 4. Status & Feedback (`/status`)
+
+<img width="240" height="286" alt="success" src="https://github.com/user-attachments/assets/9578d326-7646-4fb4-b8f7-04546ec632cd" />
 
 After any action (WoL, Ping, Service Check), you are redirected to `/status?s=success` or `/status?s=error`.
 
@@ -349,8 +351,7 @@ After any action (WoL, Ping, Service Check), you are redirected to `/status?s=su
 
 This page displays your network's current public IP address as seen from the internet (via `api.ipify.org`).
 
-> **[INSERT SCREENSHOT: copy_ip_page.png]**
-> _Caption: The Public IP display with a "Fetch IP" button and a Copy icon._
+<img width="240" height="286" alt="copyIp" src="https://github.com/user-attachments/assets/125cff18-d3e9-477a-bdea-8503cc7fbd91" />
 
 - **Fetch IP**: Click this to refresh the public IP. If your ISP changes your IP, this updates the value.
 - **Copy Button**: Clicking the clipboard icon copies the full HTTPS URL (e.g., `https://123.45.67.89:8443`) to your clipboard for easy pasting into a remote browser.
