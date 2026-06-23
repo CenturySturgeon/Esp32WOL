@@ -102,30 +102,34 @@ static esp_err_t nvs_load_sessions()
         }
 
         for (int i = 1; i <= count; i++)
-            for (int i = 1; i <= count; i++)
-            {
-                char key[32];
-                size_t required_size;
+        {
+            char key[32];
+            size_t required_size;
 
-                // Load Name - Note the change to temp_list
-                snprintf(key, sizeof(key), "user_%d_name", i);
-                required_size = sizeof(temp_list[i - 1].name);                   // Fixed
-                nvs_get_str(handle, key, temp_list[i - 1].name, &required_size); // Fixed
+            // Load Name - Note the change to temp_list
+            snprintf(key, sizeof(key), "user_%d_name", i);
+            required_size = sizeof(temp_list[i - 1].name);
+            nvs_get_str(handle, key, temp_list[i - 1].name, &required_size);
 
-                // Load TTL
-                snprintf(key, sizeof(key), "user_%d_TTL", i);
-                nvs_get_u8(handle, key, &temp_list[i - 1].ttl); // Fixed
+            // Load TTL
+            snprintf(key, sizeof(key), "user_%d_TTL", i);
+            nvs_get_u8(handle, key, &temp_list[i - 1].ttl);
 
-                // Load Hash
-                snprintf(key, sizeof(key), "user_%d_hash", i);
-                required_size = sizeof(temp_list[i - 1].hash);                   // Fixed
-                nvs_get_str(handle, key, temp_list[i - 1].hash, &required_size); // Fixed
+            // Load Salt (PBKDF2 salt)
+            snprintf(key, sizeof(key), "user_%d_salt", i);
+            required_size = sizeof(temp_list[i - 1].salt);                   
+            nvs_get_str(handle, key, temp_list[i - 1].salt, &required_size);
 
-                // Load HMAC Binary Blob
-                snprintf(key, sizeof(key), "user_%d_hmac", i);
-                required_size = sizeof(temp_list[i - 1].hmac);                    // Fixed
-                nvs_get_blob(handle, key, temp_list[i - 1].hmac, &required_size); // Fixed
-            }
+            // Load Hash (PBKDF2-HMAC-SHA256)
+            snprintf(key, sizeof(key), "user_%d_hash", i);
+            required_size = sizeof(temp_list[i - 1].hash); 
+            nvs_get_str(handle, key, temp_list[i - 1].hash, &required_size);
+
+            // Load HMAC Binary Blob
+            snprintf(key, sizeof(key), "user_%d_hmac", i);
+            required_size = sizeof(temp_list[i - 1].hmac);                    // Fixed
+            nvs_get_blob(handle, key, temp_list[i - 1].hmac, &required_size); // Fixed
+        }
     }
 
     // Hand the data over to auth.c
